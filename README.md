@@ -2,15 +2,15 @@
 
 Command to run for fine-tuning:
 ```bash
-CUDA_VISIBLE_DEVICES=4,5,6,7 python -m torch.distributed.run --nproc_per_node=4 fine-tune.py \
+python -m torch.distributed.run --nproc_per_node=8 fine-tune.py \
     --dataset wikitext \
     --subset wikitext-103-raw-v1 \
-    --output_dir models \
-    --model_name gpt2-medium \
+    --output_dir /data/james/models \
+    --model_name gpt2-large \
     --per_device_train_batch_size 4 \
-    --gradient_accumulation_steps 1 \
-    --evaluation_strategy epoch \
-    --save_strategy epoch \
+    --gradient_accumulation_steps 256 \
+    --evaluation_strategy epochs \
+    --save_strategy epochs \
     --log_level info \
     --per_device_eval_batch_size 4 \
     --eval_accumulation_steps 1 \
@@ -27,5 +27,6 @@ CUDA_VISIBLE_DEVICES=4,5,6,7 python -m torch.distributed.run --nproc_per_node=4 
     --lr_scheduler_type constant \
     --dataloader_num_workers 4 \
     --disable_tqdm False \
-    --load_best_model_at_end True 
+    --load_best_model_at_end True \
+    --cache_dir /data/james/.cache
 ```

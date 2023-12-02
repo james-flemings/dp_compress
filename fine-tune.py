@@ -26,6 +26,10 @@ class ModelArguments:
         "help": "Model sequence length"
     })
 
+    cache_dir: str = field(default="/data/james/.cache", metadata={
+        "help": "Cache directory for Huggingface data"
+    })
+
 @dataclass
 class Arguments:
     train: dp_transformers.TrainingArguments
@@ -33,6 +37,7 @@ class Arguments:
     model: ModelArguments
 
 def main(args: Arguments):
+    #os.environ["TRANSFORMER_CACHE"] = args.model.cache_dir
     transformers.set_seed(args.train.seed)
     train_args = args.train
     privacy_args = args.privacy
@@ -59,15 +64,14 @@ def main(args: Arguments):
     logger.info(f"Privacy parameters {privacy_args}")
 
     # Load model
-    model = transformers.AutoModelForCausalLM.from_pretrained(args.model.model_name)
+    model = transformers.AutoModelForCausalLM.from_pretrained(args.model.model_name, cache_dir=args.model.cache_dir)
     model = model.to(train_args.device)
 
     # Load dataset
-    dataset = datasets.load_dataset(args.model.dataset, args.model.subset)
+    dataset = datasets.load_dataset(args.model.dataset, args.model.subset, cache_dir=args.model.cache_dir)
 
     # Load tokenizer
-    # Load tokenizer
-    tokenizer = transformers.AutoTokenizer.from_pretrained(args.model.model_name)
+    tokenizer = transformers.AutoTokenizer.from_pretrained(args.model.model_name, cache_dir=args.model.cache_dir)
     num_added_toks = tokenizer.add_special_tokens({'pad_token': '[PAD]'})
     mean_tok_emb = model.transformer.wte.weight.data.mean(dim=0)
     model.resize_token_embeddings(len(tokenizer))
@@ -101,7 +105,8 @@ def main(args: Arguments):
 
     model = model.cuda()
     model.train()
-
+    train_args.label_names = ['labels']
+    train_args.output_dir = os.path.join(train_args.output_dir, f"{args.model.model_name}-{args.model.dataset}-{args.privacy.target_epsilon}-dp")
     data_collator = dp_transformers.DataCollatorForPrivateCausalLanguageModeling(tokenizer)
     trainer = dp_transformers.dp_utils.OpacusDPTrainer(
         args=train_args,
@@ -110,7 +115,7 @@ def main(args: Arguments):
         eval_dataset=lm_dataset['validation'],
         data_collator=data_collator,
         privacy_args=privacy_args,
-        tokenizer=tokenizer
+        tokenizer=tokenizer,
     )
 
     try:
@@ -122,10 +127,9 @@ def main(args: Arguments):
             "final_epsilon_prv": eps_prv,
             "final_epsilon_rdp": eps_rdp
         })
-
     if train_args.local_rank == 0 or train_args.local_rank == -1:
         metrics = train_result.metrics
-        trainer.save_model(train_args.output_dir)
+        trainer.save_model()
         trainer.log_metrics("train", metrics)
         trainer.save_metrics("train", metrics)
 
