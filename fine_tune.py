@@ -95,11 +95,11 @@ def main(args: Arguments):
         result["labels"] = result["input_ids"].copy()
         return result
 
-    tokenized_datset = dataset.map(tokenize_function,
+    tokenized_dataset = dataset.map(tokenize_function,
                                    batched=True,
                                    num_proc=8,
                                    remove_columns='text')
-    lm_dataset = tokenized_datset.map(group_texts,
+    lm_dataset = tokenized_dataset.map(group_texts,
                                       batched=True,
                                       num_proc=8)
 

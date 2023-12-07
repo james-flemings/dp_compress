@@ -2,15 +2,15 @@
 
 Command to run for fine-tuning:
 ```bash
-python -m torch.distributed.run --nproc_per_node=8 fine-tune.py \
+python -m torch.distributed.run --nproc_per_node=8 fine_tune.py \
     --dataset wikitext \
     --subset wikitext-103-raw-v1 \
     --output_dir /data/james/models \
     --model_name gpt2-large \
     --per_device_train_batch_size 4 \
     --gradient_accumulation_steps 256 \
-    --evaluation_strategy epochs \
-    --save_strategy epochs \
+    --evaluation_strategy epoch \
+    --save_strategy epoch \
     --log_level info \
     --per_device_eval_batch_size 4 \
     --eval_accumulation_steps 1 \
