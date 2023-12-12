@@ -39,9 +39,9 @@ python generate_text.py \
     --cache_dir /data/james/.cache \
     --dataset wikitext \
     --subset wikitext-103-raw-v1 \
-    --seq_length 128 \
+    --seq_len 128 \
     --total_sequences 2 \
     --do_sample \
-    --prompt_len 32 
-    --device cuda:6
+    --device cuda:6 \
+    --prompt_len 32  
 ```

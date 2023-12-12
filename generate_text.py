@@ -16,14 +16,13 @@ logger.setLevel(logging.INFO)
 def calc_perplexity(encodings, cur_model):
     max_length = cur_model.config.n_positions
     stride = 512
-    device = 'cuda' if torch.cuda.is_available() else "cpu"
     nlls_cur = []
 
     for i in range(0, encodings.size(1), stride):
         begin_loc = max(i + stride - max_length, 0)
         end_loc = min(i + stride, encodings.size(1))
         trg_len = end_loc - i  # may be different from stride on last loop
-        input_ids = encodings[:, begin_loc:end_loc].to(device)
+        input_ids = encodings[:, begin_loc:end_loc].to(args.device)
         target_ids = input_ids.clone()
         target_ids[:, :-trg_len] = -100
         target_ids[target_ids==cur_model.config.pad_token_id] = -100
@@ -38,9 +37,15 @@ def calc_perplexity(encodings, cur_model):
 
 
 def main(args):
-    model = transformers.GPT2LMHeadModel.from_pretrained(args.model_type, cache_dir="/data/james/.cache")
     # Load tokenizer
     tokenizer = transformers.AutoTokenizer.from_pretrained(args.model_type, cache_dir="/data/james/.cache")
+    model = 0 
+    if tokenizer.pad_token_id: 
+        model = transformers.GPT2LMHeadModel.from_pretrained(args.model_type, cache_dir="/data/james/.cache",
+                                                             pad_token_id=tokenizer.pad_token_id)
+    else:
+        model = transformers.GPT2LMHeadModel.from_pretrained(args.model_type, cache_dir="/data/james/.cache",
+                                                             pad_token_id=tokenizer.eos_token_id)  
     num_added_toks = tokenizer.add_special_tokens({'pad_token': '[PAD]'})
     mean_tok_emb = model.transformer.wte.weight.data.mean(dim=0)
     # Initialize the newly-added token embedding to the mean of all token embeddings
@@ -60,6 +65,7 @@ def main(args):
     #    model, 
     #)
     model = model.to(args.device)
+    model.eval()
 
     # Load dataset
     dataset = datasets.load_dataset(args.dataset, args.subset, cache_dir=args.cache_dir)
@@ -93,7 +99,7 @@ def main(args):
         input_ids = torch.tensor(prompt, device=args.device)
         output_sequence = model.generate(
             input_ids=input_ids,
-            max_length=args.length,
+            max_length=args.seq_len,
             temperature=args.temperature,
             top_k=args.k,
             top_p=args.p,
@@ -109,20 +115,19 @@ def main(args):
 
     lm_dataset.set_format(type='torch')
     subset = np.arange(args.total_sequences)
-    data_trainset = Subset(lm_dataset, subset)
-    data_loader = DataLoader(data_trainset)
-    #data_loader = DataLoader(lm_dataset)
+    data_loader = DataLoader(lm_dataset.select(subset))
     ppls_cur = []
     all_sequences = []
     all_prompts = []
     with torch.no_grad():
-        for i, data in tqdm.tqdm(enumerate(data_loader)):
+        for i, data in tqdm(enumerate(data_loader)):
+            input = data['input_ids'].to(args.device)
             if i == args.total_sequences:
                 break
-            prompt = data[:args.prompt_len]
-            sequence, ppl = generate_text(prompt, args.num_seq) 
-            all_prompts.append(prompt)
-            all_sequences.append(sequence)
+            prompt = input[: , :args.prompt_len]
+            sequence, ppl = generate_text(prompt) 
+            all_prompts.append(tokenizer.decode(prompt[0]))
+            all_sequences.append(tokenizer.decode(sequence[0]))
             ppls_cur.append(ppl)
     
     logger.info(f"Current PPL: %.2f±%.2f", np.mean(ppls_cur),np.std(ppls_cur))
@@ -131,7 +136,7 @@ def main(args):
 
     output_path = os.path.join(args.output_dir, "synthetic_data.csv")
     fields = ['prompt', 'text']
-    with open(output_path, 'w', encoding='utf-9') as f:
+    with open(output_path, 'w', encoding='utf-8') as f:
         csv_writer = csv.writer(f)
         csv_writer.writerow(fields)
         for prompt, sequence in zip(all_prompts, all_sequences):
@@ -184,6 +189,15 @@ if __name__ == "__main__":
         "--seq_len",
         type=int,
         default=128
+    )
+    parser.add_argument(
+    "--temperature",
+    type=float,
+    default=1.0,
+    help="temperature of 1.0 has no effect, lower tend toward greedy sampling",
+    )
+    parser.add_argument(
+        "--repetition_penalty", type=float, default=1.0, help="primarily useful for CTRL model; in that case, use 1.2"
     )
     parser.add_argument("--k", type=int, default=50)
     parser.add_argument("--p", type=float, default=0.9)
