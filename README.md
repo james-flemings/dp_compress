@@ -35,7 +35,7 @@ python -m torch.distributed.run --nproc_per_node=8 fine_tune.py \
 python generate_text.py \
     --model_type gpt2-large \
     --pytorch_checkpoint /data/james/models/gpt2-large-wikitext-6.0-dp/pytorch_model.bin \
-    --output_dir /data/james \
+    --output_dir . \
     --cache_dir /data/james/.cache \
     --dataset wikitext \
     --subset wikitext-103-raw-v1 \

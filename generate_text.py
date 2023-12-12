@@ -61,9 +61,6 @@ def main(args):
         state_dict[key] = value
 
     model.load_state_dict(state_dict)
-    #model = transformers.GPT2LMHeadModel._load_pretrained_model(
-    #    model, 
-    #)
     model = model.to(args.device)
     model.eval()
 
@@ -99,7 +96,7 @@ def main(args):
         input_ids = torch.tensor(prompt, device=args.device)
         output_sequence = model.generate(
             input_ids=input_ids,
-            max_length=args.seq_len,
+            max_length=(args.prompt_len + args.seq_len),
             temperature=args.temperature,
             top_k=args.k,
             top_p=args.p,
@@ -121,13 +118,15 @@ def main(args):
     all_prompts = []
     with torch.no_grad():
         for i, data in tqdm(enumerate(data_loader)):
-            input = data['input_ids'].to(args.device)
             if i == args.total_sequences:
                 break
+            input = data['input_ids'].to(args.device)
             prompt = input[: , :args.prompt_len]
             sequence, ppl = generate_text(prompt) 
-            all_prompts.append(tokenizer.decode(prompt[0]))
-            all_sequences.append(tokenizer.decode(sequence[0]))
+            all_prompts.append(tokenizer.batch_decode(prompt, skip_special_tokens=False)[0])
+            all_sequences.append(tokenizer.batch_decode(sequence[:, args.prompt_len:], skip_speical_tokens=False)[0])
+            print("prompt", tokenizer.batch_decode(prompt, skip_special_tokens=False)[0])
+            print("generated sequence", tokenizer.batch_decode(sequence[:, args.prompt_len:], skip_speical_tokens=False)[0])
             ppls_cur.append(ppl)
     
     logger.info(f"Current PPL: %.2f±%.2f", np.mean(ppls_cur),np.std(ppls_cur))
@@ -135,12 +134,12 @@ def main(args):
     random.shuffle(all_sequences)
 
     output_path = os.path.join(args.output_dir, "synthetic_data.csv")
-    fields = ['prompt', 'text']
+    fields = ['prompt', 'text', 'ppl']
     with open(output_path, 'w', encoding='utf-8') as f:
         csv_writer = csv.writer(f)
         csv_writer.writerow(fields)
-        for prompt, sequence in zip(all_prompts, all_sequences):
-            csv_writer.writerow([prompt, sequence])
+        for prompt, sequence, ppl in zip(all_prompts, all_sequences, ppls_cur):
+            csv_writer.writerow([prompt, sequence, ppl])
         
 
 if __name__ == "__main__":
