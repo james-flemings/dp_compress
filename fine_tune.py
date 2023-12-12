@@ -102,7 +102,6 @@ def main(args: Arguments):
     lm_dataset = tokenized_dataset.map(group_texts,
                                       batched=True,
                                       num_proc=8)
-
     model = model.cuda()
     model.train()
     train_args.label_names = ['labels']
