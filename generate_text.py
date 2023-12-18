@@ -117,28 +117,24 @@ def main(args):
     all_sequences = []
     all_prompts = []
     with torch.no_grad():
-        for i, data in tqdm(enumerate(data_loader)):
-            if i == args.total_sequences:
-                break
+        for i, data in tqdm(enumerate(data_loader), total=len(data_loader), desc="Text Generation"):
             input = data['input_ids'].to(args.device)
             prompt = input[: , :args.prompt_len]
             sequence, ppl = generate_text(prompt) 
-            all_prompts.append(tokenizer.batch_decode(prompt, skip_special_tokens=False)[0])
+            all_prompts.append(tokenizer.batch_decode(sequence[:, :args.prompt_len], skip_special_tokens=False)[0])
             all_sequences.append(tokenizer.batch_decode(sequence[:, args.prompt_len:], skip_speical_tokens=False)[0])
-            print("prompt", tokenizer.batch_decode(prompt, skip_special_tokens=False)[0])
-            print("generated sequence", tokenizer.batch_decode(sequence[:, args.prompt_len:], skip_speical_tokens=False)[0])
             ppls_cur.append(ppl)
     
     logger.info(f"Current PPL: %.2f±%.2f", np.mean(ppls_cur),np.std(ppls_cur))
     logger.info(f"Total generated sequences: %d", len(all_sequences))
-    random.shuffle(all_sequences)
+    #random.shuffle(all_sequences)
 
     output_path = os.path.join(args.output_dir, "synthetic_data.csv")
     fields = ['prompt', 'text', 'ppl']
     with open(output_path, 'w', encoding='utf-8') as f:
         csv_writer = csv.writer(f)
         csv_writer.writerow(fields)
-        for prompt, sequence, ppl in zip(all_prompts, all_sequences, ppls_cur):
+        for prompt, sequence, ppl in tqdm(zip(all_prompts, all_sequences, ppls_cur), total=len(all_prompts), desc="Writing file"):
             csv_writer.writerow([prompt, sequence, ppl])
         
 

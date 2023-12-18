@@ -35,12 +35,12 @@ python -m torch.distributed.run --nproc_per_node=8 fine_tune.py \
 python generate_text.py \
     --model_type gpt2-large \
     --pytorch_checkpoint /data/james/models/gpt2-large-wikitext-6.0-dp/pytorch_model.bin \
-    --output_dir . \
+    --output_dir /data/james \
     --cache_dir /data/james/.cache \
     --dataset wikitext \
     --subset wikitext-103-raw-v1 \
     --seq_len 128 \
-    --total_sequences 2 \
+    --total_sequences 100000 \
     --do_sample \
     --device cuda:6 \
     --prompt_len 32  
