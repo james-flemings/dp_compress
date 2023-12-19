@@ -41,7 +41,7 @@ def main(args: Arguments):
     transformers.set_seed(args.train.seed)
     train_args = args.train
     privacy_args = args.privacy
-    # Setup logging
+    # Setup logging 
     logging.basicConfig(
         format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
         datefmt="%m/%d/%Y %H:%M:%S",
