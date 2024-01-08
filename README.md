@@ -1,34 +1,41 @@
 # dp_compress
 
+We are using the [dp-transformers](https://github.com/microsoft/dp-transformers) library as a submodule. To properly add it, run the following commands after cloning this repository:
+
+```bash
+git submodule init
+git submodule update
+```
+
 Command to run for fine-tuning:
 ```bash
-python -m torch.distributed.run --nproc_per_node=8 fine_tune.py \
-    --dataset wikitext \
-    --subset wikitext-103-raw-v1 \
-    --output_dir /data/james/models \
+python -m torch.distributed.run --nproc_per_node=2 fine_tune.py \
+    --data_dir dataset \
+    --dataset_name yelp \
+    --output_dir models \
     --model_name gpt2-large \
-    --per_device_train_batch_size 4 \
-    --gradient_accumulation_steps 256 \
+    --per_device_train_batch_size 16 \
+    --gradient_accumulation_steps 128 \
     --evaluation_strategy epoch \
     --save_strategy epoch \
     --log_level info \
-    --per_device_eval_batch_size 4 \
+    --per_device_eval_batch_size 64 \
     --eval_accumulation_steps 1 \
-    --seed 0 \
+    --seed 42 \
     --target_epsilon 4.0 \
     --per_sample_max_grad_norm 1.0 \
     --weight_decay 0.01 \
     --remove_unused_columns False \
     --num_train_epochs 20 \
-    --logging_steps 5 \
+    --logging_steps 10 \
     --max_grad_norm 0. \
     --sequence_len 128 \
     --learning_rate 0.0001 \
     --lr_scheduler_type constant \
-    --dataloader_num_workers 4 \
+    --dataloader_num_workers 2 \
     --disable_tqdm False \
     --load_best_model_at_end True \
-    --cache_dir /data/james/.cache
+    --cache_dir None
 ```
 
 Command for generating synthetic data:

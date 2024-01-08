@@ -10,12 +10,12 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ModelArguments:
-    dataset: str = field(default="wikitext", metadata={
-        "help": "Name of dataset"
+    data_dir: str = field(default="./", metadata={
+        "help": "Path to dataset"
     })
 
-    subset: str = field(default="wikitext-103-raw-v1", metadata={
-        "help": "Subset of the dataset"
+    dataset_name: str = field(default="yelp", metadata={
+        "help": "Name of dataset used"
     })
 
     model_name: str = field(default="gpt2", metadata={
@@ -64,14 +64,16 @@ def main(args: Arguments):
     logger.info(f"Privacy parameters {privacy_args}")
 
     # Load model
-    model = transformers.AutoModelForCausalLM.from_pretrained(args.model.model_name, cache_dir=args.model.cache_dir)
+    model = transformers.AutoModelForCausalLM.from_pretrained(args.model.model_name)#, cache_dir=args.model.cache_dir)
     model = model.to(train_args.device)
 
     # Load dataset
-    dataset = datasets.load_dataset(args.model.dataset, args.model.subset, cache_dir=args.model.cache_dir)
+    data_path_train = os.path.join(args.model.data_dir, "train.csv")
+    data_path_val = os.path.join(args.model.data_dir, "val.csv")
+    dataset = datasets.load_dataset('csv', data_files={'train': data_path_train, 'validation': data_path_val})
 
     # Load tokenizer
-    tokenizer = transformers.AutoTokenizer.from_pretrained(args.model.model_name, cache_dir=args.model.cache_dir)
+    tokenizer = transformers.AutoTokenizer.from_pretrained(args.model.model_name)#, cache_dir=args.model.cache_dir)
     num_added_toks = tokenizer.add_special_tokens({'pad_token': '[PAD]'})
     mean_tok_emb = model.transformer.wte.weight.data.mean(dim=0)
     model.resize_token_embeddings(len(tokenizer))
@@ -80,38 +82,36 @@ def main(args: Arguments):
     for i in range(num_added_toks):
         model.transformer.wte.weight.data[-(i + 1), :] = mean_tok_emb
 
-    def tokenize_function(examples):
-        return tokenizer(examples['text'])
+    label_column_names = [name for name in dataset["train"].column_names if "label" in name]
 
-    block_size = args.model.sequence_len
-    def group_texts(examples):
-        concatenated_examples = {k: sum(examples[k], []) for k in examples.keys()}
-        total_length = len(concatenated_examples[list(examples.keys())[0]])
-        total_length = (total_length // block_size) * block_size
-        result = {
-            k: [t[i : i + block_size] for i in range(0, total_length, block_size)]
-            for k, t in concatenated_examples.items()
-        }
-        result["labels"] = result["input_ids"].copy()
+    # Tokenize data
+    def preprocess_function(examples):
+        batch = []
+        for t in range(len(examples['text'])):
+            text = "\t".join([examples[name][t] for name in label_column_names]) + "\n\n" + examples['text'][t] + tokenizer.eos_token
+            batch.append(text)
+
+        result = tokenizer(batch, padding="max_length", truncation=True,
+                           max_length=args.model.sequence_len)
+
         return result
 
-    tokenized_dataset = dataset.map(tokenize_function,
-                                   batched=True,
-                                   num_proc=8,
-                                   remove_columns='text')
-    lm_dataset = tokenized_dataset.map(group_texts,
-                                      batched=True,
-                                      num_proc=8)
+    # Tokenize data
+    with train_args.main_process_first(desc="tokenizing dataset"):
+        dataset = dataset.map(
+            preprocess_function, batched=True, desc="tokenizing dataset", remove_columns=dataset.column_names['train']
+        )
+
     model = model.cuda()
     model.train()
     train_args.label_names = ['labels']
-    train_args.output_dir = os.path.join(train_args.output_dir, f"{args.model.model_name}-{args.model.dataset}-{args.privacy.target_epsilon}-dp")
+    train_args.output_dir = os.path.join(train_args.output_dir, f"{args.model.model_name}-{args.model.dataset_name}-{args.privacy.target_epsilon}-dp")
     data_collator = dp_transformers.DataCollatorForPrivateCausalLanguageModeling(tokenizer)
     trainer = dp_transformers.dp_utils.OpacusDPTrainer(
         args=train_args,
         model=model,
-        train_dataset=lm_dataset['train'],
-        eval_dataset=lm_dataset['validation'],
+        train_dataset=dataset['train'],
+        eval_dataset=dataset['validation'],
         data_collator=data_collator,
         privacy_args=privacy_args,
         tokenizer=tokenizer,
