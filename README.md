@@ -15,13 +15,13 @@ python -m torch.distributed.run --nproc_per_node=8 fine_tune.py \
     --per_device_eval_batch_size 4 \
     --eval_accumulation_steps 1 \
     --seed 0 \
-    --target_epsilon 6.0 \
+    --target_epsilon 4.0 \
     --per_sample_max_grad_norm 1.0 \
     --weight_decay 0.01 \
     --remove_unused_columns False \
     --num_train_epochs 20 \
     --logging_steps 5 \
-    --max_grad_norm 1.0 \
+    --max_grad_norm 0. \
     --sequence_len 128 \
     --learning_rate 0.0001 \
     --lr_scheduler_type constant \
