@@ -9,12 +9,12 @@ git submodule update
 
 Command to run for fine-tuning:
 ```bash
-python -m torch.distributed.run --nproc_per_node=2 fine_tune.py \
-    --data_dir dataset \
+python -m torch.distributed.run --nproc_per_node=8 fine_tune.py \
+    --data_dir /data/james/yelp_data \
     --dataset_name yelp \
-    --output_dir models \
+    --output_dir /data/james/models \
     --model_name gpt2-large \
-    --per_device_train_batch_size 16 \
+    --per_device_train_batch_size 4 \
     --gradient_accumulation_steps 128 \
     --evaluation_strategy epoch \
     --save_strategy epoch \
@@ -26,7 +26,7 @@ python -m torch.distributed.run --nproc_per_node=2 fine_tune.py \
     --per_sample_max_grad_norm 1.0 \
     --weight_decay 0.01 \
     --remove_unused_columns False \
-    --num_train_epochs 20 \
+    --num_train_epochs 10 \
     --logging_steps 10 \
     --max_grad_norm 0. \
     --sequence_len 128 \
@@ -35,7 +35,7 @@ python -m torch.distributed.run --nproc_per_node=2 fine_tune.py \
     --dataloader_num_workers 2 \
     --disable_tqdm False \
     --load_best_model_at_end True \
-    --cache_dir None
+    --cache_dir /data/james/.cache
 ```
 
 Command for generating synthetic data:

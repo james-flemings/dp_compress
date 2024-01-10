@@ -64,16 +64,16 @@ def main(args: Arguments):
     logger.info(f"Privacy parameters {privacy_args}")
 
     # Load model
-    model = transformers.AutoModelForCausalLM.from_pretrained(args.model.model_name)#, cache_dir=args.model.cache_dir)
+    model = transformers.AutoModelForCausalLM.from_pretrained(args.model.model_name, cache_dir=args.model.cache_dir)
     model = model.to(train_args.device)
 
     # Load dataset
     data_path_train = os.path.join(args.model.data_dir, "train.csv")
     data_path_val = os.path.join(args.model.data_dir, "val.csv")
-    dataset = datasets.load_dataset('csv', data_files={'train': data_path_train, 'validation': data_path_val})
+    dataset = datasets.load_dataset('csv', data_files={'train': data_path_train, 'validation': data_path_val}, cache_dir=args.model.cache_dir)
 
     # Load tokenizer
-    tokenizer = transformers.AutoTokenizer.from_pretrained(args.model.model_name)#, cache_dir=args.model.cache_dir)
+    tokenizer = transformers.AutoTokenizer.from_pretrained(args.model.model_name, cache_dir=args.model.cache_dir)
     num_added_toks = tokenizer.add_special_tokens({'pad_token': '[PAD]'})
     mean_tok_emb = model.transformer.wte.weight.data.mean(dim=0)
     model.resize_token_embeddings(len(tokenizer))
