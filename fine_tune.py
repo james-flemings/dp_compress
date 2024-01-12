@@ -29,6 +29,9 @@ class ModelArguments:
     cache_dir: str = field(default="/data/james/.cache", metadata={
         "help": "Cache directory for Huggingface data"
     })
+    use_control_codes: bool = field(default=True, metadata={
+        "help": "Prepend control codes to text"
+    })
 
 @dataclass
 class Arguments:
@@ -96,11 +99,31 @@ def main(args: Arguments):
 
         return result
 
+    def tokenize(examples):
+        return tokenizer(examples['text'])
+
+    block_size = args.model.sequence_len
+    def group_function(examples):
+        concatenated_examples = {k: sum(examples[k], []) for k in examples.keys()}
+        total_length = len(concatenated_examples[list(examples.keys())[0]])
+        total_length = (total_length // block_size) * block_size
+        result = {
+            k: [t[i : i + block_size] for i in range(0, total_length, block_size)]
+            for k, t in concatenated_examples.items()
+        }
+        result["labels"] = result["input_ids"].copy()
+        return result
+
     # Tokenize data
     with train_args.main_process_first(desc="tokenizing dataset"):
-        dataset = dataset.map(
-            preprocess_function, batched=True, desc="tokenizing dataset", remove_columns=dataset.column_names['train']
-        )
+        print(args.model.use_control_codes)
+        if args.model.use_control_codes:
+            dataset = dataset.map(
+                preprocess_function, batched=True, desc="tokenizing dataset", remove_columns=dataset.column_names['train']
+            )
+        else:
+            dataset = dataset.map(tokenize, remove_columns=dataset.column_names['train'], desc="Tokenizing dataset")
+            dataset = dataset.map(group_function, batched=True, desc="grouping dataset")
 
     model = model.cuda()
     model.train()

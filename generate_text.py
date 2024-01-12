@@ -3,12 +3,12 @@ import logging
 import torch
 from torch.utils.data import DataLoader, Subset
 import transformers
-import datasets
 from tqdm import tqdm
 import random
 import numpy as np
 import os
 import csv
+import collections
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -64,78 +64,76 @@ def main(args):
     model = model.to(args.device)
     model.eval()
 
-    # Load dataset
-    dataset = datasets.load_dataset(args.dataset, args.subset, cache_dir=args.cache_dir)
-
-    def tokenize_function(examples):
-        return tokenizer(examples['text'])
-
-    block_size = args.seq_len
-    def group_texts(examples):
-        concatenated_examples = {k: sum(examples[k], []) for k in examples.keys()}
-        total_length = len(concatenated_examples[list(examples.keys())[0]])
-        total_length = (total_length // block_size) * block_size
-        result = {
-            k: [t[i : i + block_size] for i in range(0, total_length, block_size)]
-            for k, t in concatenated_examples.items()
-        }
-        result["labels"] = result["input_ids"].copy()
-        return result
-        
-    tokenized_dataset = dataset['train'].map(tokenize_function,
-                                    batched=True,
-                                    num_proc=8,
-                                    remove_columns=['text'])
-
-    lm_dataset = tokenized_dataset.map(group_texts,
-                                       batched=True,
-                                       num_proc=8)
     logger.info(args)
     
-    def generate_text(prompt):
-        input_ids = torch.tensor(prompt, device=args.device)
-        output_sequence = model.generate(
-            input_ids=input_ids,
-            max_length=(args.prompt_len + args.seq_len),
-            temperature=args.temperature,
-            top_k=args.k,
-            top_p=args.p,
-            early_stopping=True,
-            repetition_penalty=args.repetition_penalty,
-            do_sample=args.do_sample,
-            num_return_sequences=args.num_return_sequences,  # overgenerate to ensure we have enough non-empty generated sequences
-            no_repeat_ngram_size=2,
-        )
+    def generate_text(prompt, seq_num, prompt_length):
+        ppls_cur = []
+        all_data = []
+        
+        for _ in tqdm(range(seq_num // args.batch_size + 1)):
+            input_ids = torch.tensor(prompt, device=args.device).repeat(args.batch_size, 1)
+            output_sequences = model.generate(
+                input_ids=input_ids,
+                max_length=(args.prompt_len + args.seq_len),
+                temperature=args.temperature,
+                top_k=args.k,
+                top_p=args.p,
+                early_stopping=True,
+                repetition_penalty=args.repetition_penalty,
+                do_sample=args.do_sample,
+                num_return_sequences=args.num_return_sequences,  # overgenerate to ensure we have enough non-empty generated sequences
+                no_repeat_ngram_size=2,
+            )
 
-        ppl = calc_perplexity(output_sequence, model)
-        return output_sequence, ppl
+            ppl = calc_perplexity(output_sequences, model)
+            ppls_cur.append(ppl)
 
-    lm_dataset.set_format(type='torch')
-    subset = np.arange(args.total_sequences)
-    data_loader = DataLoader(lm_dataset.select(subset))
+            generated_sequences = tokenizer.batch_decode(output_sequences, skip_special_tokens=True,
+                                                         clean_up_tokenization_spaces=True)
+            for g in generated_sequences:
+                labels, seq = g[:prompt_length], g[:prompt_length:]
+                seq = " ".join(seq.split())
+                labels = labels.strip().split("\t")
+                if seq:
+                    all_data.append([seq] + labels)
+        if len(all_data) > seq_num:
+            all_data = random.sample(all_data, seq_num)
+        return all_data, ppls_cur
+
     ppls_cur = []
     all_sequences = []
-    all_prompts = []
+    title = 0
     with torch.no_grad():
-        for i, data in tqdm(enumerate(data_loader), total=len(data_loader), desc="Text Generation"):
-            input = data['input_ids'].to(args.device)
-            prompt = input[: , :args.prompt_len]
-            sequence, ppl = generate_text(prompt) 
-            all_prompts.append(tokenizer.batch_decode(sequence[:, :args.prompt_len], skip_special_tokens=False)[0])
-            all_sequences.append(tokenizer.batch_decode(sequence[:, args.prompt_len:], skip_speical_tokens=False)[0])
-            ppls_cur.append(ppl)
-    
+        prompt_counter = collections.Counter()
+        with open(args.input_training_file, encoding="utf-8") as rf:
+            csv_reader = csv.reader(rf)
+            title = next(csv_reader)
+            label_column_index = [i for i, name in enumerate(title) if "label" in name]
+
+            for line in csv_reader:
+                prompt = "\t".join([line[idx] for idx in label_column_index]) + "\n\n"
+                prompt_counter[prompt] += 1
+        ratio_generation_training = args.total_sequences / sum(prompt_counter.values())
+
+        for prompt_text in tqdm(prompt_counter):
+            prompt = tokenizer(prompt_text)["input_ids"]
+            num_seq_to_generate = round(prompt_counter[prompt_text] * ratio_generation_training)
+            if num_seq_to_generate > 0:
+                sequences, ppls = generate_text(prompt, num_seq_to_generate, len(prompt_text))
+                all_sequences += sequences
+                ppls_cur += ppls
+
     logger.info(f"Current PPL: %.2f±%.2f", np.mean(ppls_cur),np.std(ppls_cur))
     logger.info(f"Total generated sequences: %d", len(all_sequences))
-    #random.shuffle(all_sequences)
+    random.shuffle(all_sequences)
 
-    output_path = os.path.join(args.output_dir, "synthetic_data.csv")
-    fields = ['prompt', 'text', 'ppl']
-    with open(output_path, 'w', encoding='utf-8') as f:
-        csv_writer = csv.writer(f)
-        csv_writer.writerow(fields)
-        for prompt, sequence, ppl in tqdm(zip(all_prompts, all_sequences, ppls_cur), total=len(all_prompts), desc="Writing file"):
-            csv_writer.writerow([prompt, sequence, ppl])
+    output_path = os.path.join(args.output_dir, str(args.length) + "_synthetic_data.csv")
+    with open(output_path, 'w', encoding='utf-8') as wf:
+        csv_writer = csv.writer(wf)
+        csv_writer.writerow(title)
+        for obj in all_sequences:
+            if obj[0]:
+                csv_writer.writerow(obj)
         
 
 if __name__ == "__main__":
@@ -153,6 +151,12 @@ if __name__ == "__main__":
         default=None,
         required=True,
         help="Path to weights of trained model"
+    )
+    parser.add_argument(
+        "--input_training_file",
+        default=None,
+        type=str,
+        required=True
     )
     parser.add_argument(
         "--output_dir",

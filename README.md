@@ -22,7 +22,7 @@ python -m torch.distributed.run --nproc_per_node=8 fine_tune.py \
     --per_device_eval_batch_size 64 \
     --eval_accumulation_steps 1 \
     --seed 42 \
-    --target_epsilon 4.0 \
+    --target_epsilon 2.0 \
     --per_sample_max_grad_norm 1.0 \
     --weight_decay 0.01 \
     --remove_unused_columns False \
@@ -35,6 +35,7 @@ python -m torch.distributed.run --nproc_per_node=8 fine_tune.py \
     --dataloader_num_workers 2 \
     --disable_tqdm False \
     --load_best_model_at_end True \
+    --use_control_codes False \
     --cache_dir /data/james/.cache
 ```
 
@@ -43,6 +44,7 @@ Command for generating synthetic data:
 python generate_text.py \
     --model_type gpt2-large \
     --pytorch_checkpoint /data/james/models/gpt2-large-wikitext-6.0-dp/pytorch_model.bin \
+    --input_training_file /data/james/yelp_data/train.csv \
     --output_dir /data/james \
     --cache_dir /data/james/.cache \
     --dataset wikitext \
@@ -88,4 +90,18 @@ python -m torch.distributed.run --nproc_per_node=8 knowledge_distil.py \
     --disable_tqdm False \
     --load_best_model_at_end True \
     --cache_dir /data/james/.cache
+```
+
+Command for running prediction
+
+```bash
+python prediction.py \
+    --input_test_file /data/james/yelp_data \
+    --output_dir /data/james \
+    --teacher_model_type gpt2-large \
+    --student_model_type distilgpt2 \
+    --syn_data_teacher_file /data/james/models/gpt2-large-yelp-4.0-dp \
+    --syn_data_student_file /data/james/models \
+    --cache_dir /data/james/.cache \
+    --sequence_len 128 
 ```
