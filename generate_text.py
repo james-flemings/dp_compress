@@ -38,14 +38,24 @@ def calc_perplexity(encodings, cur_model):
 
 def main(args):
     # Load tokenizer
-    tokenizer = transformers.AutoTokenizer.from_pretrained(args.model_type, cache_dir="/data/james/.cache")
-    model = 0 
-    if tokenizer.pad_token_id: 
-        model = transformers.GPT2LMHeadModel.from_pretrained(args.model_type, cache_dir="/data/james/.cache",
-                                                             pad_token_id=tokenizer.pad_token_id)
+    if args.use_cache:
+        tokenizer = transformers.AutoTokenizer.from_pretrained(args.model_type, cache_dir="/data/james/.cache")
     else:
-        model = transformers.GPT2LMHeadModel.from_pretrained(args.model_type, cache_dir="/data/james/.cache",
-                                                             pad_token_id=tokenizer.eos_token_id)  
+        tokenizer = transformers.AutoTokenizer.from_pretrained(args.model_type)
+    model = 0 
+    if args.use_cache:
+        if tokenizer.pad_token_id: 
+            model = transformers.GPT2LMHeadModel.from_pretrained(args.model_type, cache_dir="/data/james/.cache",
+                                                                pad_token_id=tokenizer.pad_token_id)
+        else:
+            model = transformers.GPT2LMHeadModel.from_pretrained(args.model_type, cache_dir="/data/james/.cache",
+                                                                pad_token_id=tokenizer.eos_token_id)  
+    else:
+        if tokenizer.pad_token_id: 
+            model = transformers.GPT2LMHeadModel.from_pretrained(args.model_type, pad_token_id=tokenizer.pad_token_id)
+        else:
+            model = transformers.GPT2LMHeadModel.from_pretrained(args.model_type, pad_token_id=tokenizer.eos_token_id)  
+
     num_added_toks = tokenizer.add_special_tokens({'pad_token': '[PAD]'})
     mean_tok_emb = model.transformer.wte.weight.data.mean(dim=0)
     # Initialize the newly-added token embedding to the mean of all token embeddings
@@ -207,5 +217,6 @@ if __name__ == "__main__":
     parser.add_argument("--prompt_len", type=int, default=32)
     parser.add_argument("--do_sample", action="store_true", help="sampling when generation")
     parser.add_argument("--device", type=str, default="cpu")
+    parser.add_argument("--use_cache", type=bool)
     args = parser.parse_args()
     main(args)

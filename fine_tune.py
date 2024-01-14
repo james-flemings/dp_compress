@@ -1,9 +1,9 @@
 import os
+import sys
+import logging
 import datasets
 import dp_transformers
 import transformers
-import sys
-import logging
 from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
@@ -25,12 +25,11 @@ class ModelArguments:
     sequence_len: int = field(default=128, metadata={
         "help": "Model sequence length"
     })
-
+    use_cache: bool = field(default=True, metadata={
+        "help": "Whether to use cache directory or not"
+    })
     cache_dir: str = field(default="/data/james/.cache", metadata={
         "help": "Cache directory for Huggingface data"
-    })
-    use_control_codes: bool = field(default=True, metadata={
-        "help": "Prepend control codes to text"
     })
 
 @dataclass
@@ -40,7 +39,6 @@ class Arguments:
     model: ModelArguments
 
 def main(args: Arguments):
-    #os.environ["TRANSFORMER_CACHE"] = args.model.cache_dir
     transformers.set_seed(args.train.seed)
     train_args = args.train
     privacy_args = args.privacy
@@ -67,16 +65,24 @@ def main(args: Arguments):
     logger.info(f"Privacy parameters {privacy_args}")
 
     # Load model
-    model = transformers.AutoModelForCausalLM.from_pretrained(args.model.model_name, cache_dir=args.model.cache_dir)
-    model = model.to(train_args.device)
+    if args.model.use_cache:
+        model = transformers.AutoModelForCausalLM.from_pretrained(args.model.model_name, cache_dir=args.model.cache_dir)
+    else:
+        model = transformers.AutoModelForCausalLM.from_pretrained(args.model.model_name)
 
     # Load dataset
     data_path_train = os.path.join(args.model.data_dir, "train.csv")
     data_path_val = os.path.join(args.model.data_dir, "val.csv")
-    dataset = datasets.load_dataset('csv', data_files={'train': data_path_train, 'validation': data_path_val}, cache_dir=args.model.cache_dir)
+    if args.model.use_cache:
+        dataset = datasets.load_dataset('csv', data_files={'train': data_path_train, 'validation': data_path_val}, cache_dir=args.model.cache_dir)
+    else:
+        dataset = datasets.load_dataset('csv', data_files={'train': data_path_train, 'validation': data_path_val})
 
     # Load tokenizer
-    tokenizer = transformers.AutoTokenizer.from_pretrained(args.model.model_name, cache_dir=args.model.cache_dir)
+    if args.model.use_cache:
+        tokenizer = transformers.AutoTokenizer.from_pretrained(args.model.model_name, cache_dir=args.model.cache_dir)
+    else:
+        tokenizer = transformers.AutoTokenizer.from_pretrained(args.model.model_name)
     num_added_toks = tokenizer.add_special_tokens({'pad_token': '[PAD]'})
     mean_tok_emb = model.transformer.wte.weight.data.mean(dim=0)
     model.resize_token_embeddings(len(tokenizer))
@@ -99,31 +105,15 @@ def main(args: Arguments):
 
         return result
 
-    def tokenize(examples):
-        return tokenizer(examples['text'])
-
-    block_size = args.model.sequence_len
-    def group_function(examples):
-        concatenated_examples = {k: sum(examples[k], []) for k in examples.keys()}
-        total_length = len(concatenated_examples[list(examples.keys())[0]])
-        total_length = (total_length // block_size) * block_size
-        result = {
-            k: [t[i : i + block_size] for i in range(0, total_length, block_size)]
-            for k, t in concatenated_examples.items()
-        }
-        result["labels"] = result["input_ids"].copy()
-        return result
-
     # Tokenize data
     with train_args.main_process_first(desc="tokenizing dataset"):
-        print(args.model.use_control_codes)
-        if args.model.use_control_codes:
-            dataset = dataset.map(
-                preprocess_function, batched=True, desc="tokenizing dataset", remove_columns=dataset.column_names['train']
-            )
-        else:
-            dataset = dataset.map(tokenize, remove_columns=dataset.column_names['train'], desc="Tokenizing dataset")
-            dataset = dataset.map(group_function, batched=True, desc="grouping dataset")
+        dataset = dataset.map(
+            preprocess_function,
+            batched=True, 
+            num_proc=args.train.dataloader_num_workers,
+            desc="tokenizing dataset",
+            remove_columns=dataset.column_names['train']
+        )
 
     model = model.cuda()
     model.train()

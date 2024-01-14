@@ -32,10 +32,10 @@ python -m torch.distributed.run --nproc_per_node=8 fine_tune.py \
     --sequence_len 128 \
     --learning_rate 0.0001 \
     --lr_scheduler_type constant \
-    --dataloader_num_workers 2 \
+    --dataloader_num_workers 100 \
     --disable_tqdm False \
     --load_best_model_at_end True \
-    --use_control_codes False \
+    --use_cache \
     --cache_dir /data/james/.cache
 ```
 
@@ -46,6 +46,7 @@ python generate_text.py \
     --pytorch_checkpoint /data/james/models/gpt2-large-wikitext-6.0-dp/pytorch_model.bin \
     --input_training_file /data/james/yelp_data/train.csv \
     --output_dir /data/james \
+    --use_cache \
     --cache_dir /data/james/.cache \
     --dataset wikitext \
     --subset wikitext-103-raw-v1 \
