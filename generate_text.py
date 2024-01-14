@@ -84,7 +84,7 @@ def main(args):
             input_ids = torch.tensor(prompt, device=args.device).repeat(args.batch_size, 1)
             output_sequences = model.generate(
                 input_ids=input_ids,
-                max_length=(args.prompt_len + args.seq_len),
+                max_length=args.seq_len,
                 temperature=args.temperature,
                 top_k=args.k,
                 top_p=args.p,
@@ -137,7 +137,8 @@ def main(args):
     logger.info(f"Total generated sequences: %d", len(all_sequences))
     random.shuffle(all_sequences)
 
-    output_path = os.path.join(args.output_dir, str(args.length) + "_synthetic_data.csv")
+    output_name = str(args.seq_len) + "_" + args.dataset + "_synthetic_data.csv" 
+    output_path = os.path.join(args.output_dir, output_name)
     with open(output_path, 'w', encoding='utf-8') as wf:
         csv_writer = csv.writer(wf)
         csv_writer.writerow(title)
