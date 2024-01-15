@@ -80,7 +80,7 @@ def main(args):
         ppls_cur = []
         all_data = []
         
-        for _ in tqdm(range(seq_num // args.batch_size + 1)):
+        for _ in tqdm(range(seq_num // args.batch_size + 1), desc="Generating synthetic data"):
             input_ids = torch.tensor(prompt, device=args.device).repeat(args.batch_size, 1)
             output_sequences = model.generate(
                 input_ids=input_ids,
@@ -94,14 +94,13 @@ def main(args):
                 num_return_sequences=args.num_return_sequences,  # overgenerate to ensure we have enough non-empty generated sequences
                 no_repeat_ngram_size=2,
             )
-
             ppl = calc_perplexity(output_sequences, model)
             ppls_cur.append(ppl)
 
             generated_sequences = tokenizer.batch_decode(output_sequences, skip_special_tokens=True,
                                                          clean_up_tokenization_spaces=True)
             for g in generated_sequences:
-                labels, seq = g[:prompt_length], g[:prompt_length:]
+                labels, seq = g[:prompt_length], g[prompt_length:]
                 seq = " ".join(seq.split())
                 labels = labels.strip().split("\t")
                 if seq:
@@ -125,7 +124,7 @@ def main(args):
                 prompt_counter[prompt] += 1
         ratio_generation_training = args.total_sequences / sum(prompt_counter.values())
 
-        for prompt_text in tqdm(prompt_counter):
+        for prompt_text in tqdm(prompt_counter, desc="Going through different types of prompts"):
             prompt = tokenizer(prompt_text)["input_ids"]
             num_seq_to_generate = round(prompt_counter[prompt_text] * ratio_generation_training)
             if num_seq_to_generate > 0:
@@ -183,13 +182,6 @@ if __name__ == "__main__":
         help="Dataset to use for prompting"
     )
     parser.add_argument(
-        "--subset",
-        type=str,
-        default=None,
-        required=False,
-        help="Data subset for Huggingface"
-    )
-    parser.add_argument(
         "--cache_dir",
         type=str,
         default=None,
@@ -211,11 +203,10 @@ if __name__ == "__main__":
     )
     parser.add_argument("--k", type=int, default=50)
     parser.add_argument("--p", type=float, default=0.9)
-    parser.add_argument("--batch_size", type=int, default=32)
+    parser.add_argument("--batch_size", type=int, default=8)
     parser.add_argument("--seed", default=0)
     parser.add_argument("--num_return_sequences", type=int, default=2)
     parser.add_argument("--total_sequences", type=int, default=100000)
-    parser.add_argument("--prompt_len", type=int, default=32)
     parser.add_argument("--do_sample", action="store_true", help="sampling when generation")
     parser.add_argument("--device", type=str, default="cpu")
     parser.add_argument("--use_cache", type=bool)

@@ -43,18 +43,15 @@ Command for generating synthetic data:
 ```bash
 python generate_text.py \
     --model_type gpt2-large \
-    --pytorch_checkpoint /data/james/models/gpt2-large-wikitext-6.0-dp/pytorch_model.bin \
-    --input_training_file /data/james/yelp_data/train.csv \
-    --output_dir /data/james \
-    --use_cache \
+    --pytorch_checkpoint models/pytorch_model.bin \
+    --input_training_file dataset/train.csv \
+    --output_dir dataset \
     --cache_dir /data/james/.cache \
-    --dataset wikitext \
-    --subset wikitext-103-raw-v1 \
+    --dataset yelp \
     --seq_len 128 \
     --total_sequences 100000 \
     --do_sample \
-    --device cuda:6 \
-    --prompt_len 32  
+    --device cuda:0 
 ```
 
 Command for performing knowledge distillation:
