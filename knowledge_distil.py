@@ -128,21 +128,21 @@ def main(args: Arguments):
     logger.info(f"Privacy parameters {privacy_args}")
 
     if args.model.use_cache:
-        tokenizer = transformers.AutoTokenizer.from_pretrained(args.model.teacher_model, cache_dir="/data/james/.cache")
+        tokenizer = transformers.AutoTokenizer.from_pretrained(args.model.teacher_model, cache_dir=args.model.cache_dir)
     else:
         tokenizer = transformers.AutoTokenizer.from_pretrained(args.model.teacher_model)
 
     teacher_model = 0 
     if tokenizer.pad_token_id: 
         if args.model.use_cache:
-            teacher_model = transformers.GPT2LMHeadModel.from_pretrained(args.model.teacher_model, cache_dir="/data/james/.cache",
+            teacher_model = transformers.GPT2LMHeadModel.from_pretrained(args.model.teacher_model, cache_dir=args.model.cache_dir,
                                                              pad_token_id=tokenizer.pad_token_id)
         else:
             teacher_model = transformers.GPT2LMHeadModel.from_pretrained(args.model.teacher_model,
                                                              pad_token_id=tokenizer.pad_token_id)
     else:
         if args.model.use_cache:
-            teacher_model = transformers.GPT2LMHeadModel.from_pretrained(args.model.teacher_model, cache_dir="/data/james/.cache",
+            teacher_model = transformers.GPT2LMHeadModel.from_pretrained(args.model.teacher_model, cache_dir=args.model.cache_dir,
                                                              pad_token_id=tokenizer.eos_token_id)  
         else:
             teacher_model = transformers.GPT2LMHeadModel.from_pretrained(args.model.teacher_model,
@@ -208,7 +208,7 @@ def main(args: Arguments):
             desc="tokenizing dataset",
             remove_columns=dataset.column_names['train']
         )
-    output_name = f'{args.model.student_model}-{privacy_args.target_epsilon}-DPKD-syn-data'
+    output_name = f'{args.model.student_model}-{args.model.dataset}-{privacy_args.target_epsilon}-DPKD-syn-data'
     train_args.output_dir = os.path.join(train_args.output_dir, output_name)
     trainer = DistilTrainer(
         student_model=student_model,

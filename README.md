@@ -94,12 +94,14 @@ Command for running prediction
 
 ```bash
 python prediction.py \
-    --input_test_file /data/james/yelp_data \
-    --output_dir /data/james \
+    --input_test_file dataset \
+    --output_dir models \
     --teacher_model_type gpt2-large \
     --student_model_type distilgpt2 \
-    --syn_data_teacher_file /data/james/models/gpt2-large-yelp-4.0-dp \
-    --syn_data_student_file /data/james/models \
+    --syn_data_teacher_file models/gpt2-large-yelp-4.0-dp \
+    --syn_data_student_file models/distilgpt2-4.0-DPKD-syn-data \
     --cache_dir /data/james/.cache \
-    --sequence_len 128 
+    --device cuda:0 \
+    --sequence_len 128 \
+    --target_epsilon 4.0
 ```
