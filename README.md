@@ -35,7 +35,7 @@ python -m torch.distributed.run --nproc_per_node=8 fine_tune.py \
     --dataloader_num_workers 100 \
     --disable_tqdm False \
     --load_best_model_at_end True \
-    --use_cache \
+    --use_cache True \
     --cache_dir /data/james/.cache
 ```
 
@@ -57,36 +57,36 @@ python generate_text.py \
 Command for performing knowledge distillation:
 ```bash
 python -m torch.distributed.run --nproc_per_node=8 knowledge_distil.py \
-    --dataset wikitext \
-    --subset wikitext-103-raw-v1 \
-    --output_dir /data/james/models \
+    --dataset yelp \
+    --output_dir models \
     --student_model distilgpt2 \
     --teacher_model gpt2-large \
-    --pytorch_checkpoint /data/james/models/gpt2-large-wikitext-6.0-dp/pytorch_model.bin \
-    --synthetic_data_file /data/james/synthetic_data.csv \
+    --pytorch_checkpoint models/gpt2-large-yelp-4.0-dp/pytorch_model.bin \
+    --synthetic_data_file dataset/128_yelp_synthetic_data.csv \
     --sequence_len 128 \
     --lambda_param 0.5 \
     --temperature 1.0 \
-    --per_device_train_batch_size 64 \
+    --per_device_train_batch_size 16 \
     --gradient_accumulation_steps 1 \
     --evaluation_strategy no \
     --save_strategy no \
     --log_level info \
-    --per_device_eval_batch_size 4 \
+    --per_device_eval_batch_size 8 \
     --eval_accumulation_steps 1 \
-    --seed 0 \
-    --target_epsilon 3.0 \
+    --seed 42 \
+    --target_epsilon 4.0 \
     --per_sample_max_grad_norm 1.0 \
     --weight_decay 0.01 \
     --remove_unused_columns False \
     --num_train_epochs 10 \
-    --logging_steps 5 \
+    --logging_steps 10 \
     --max_grad_norm 0.0 \
     --lr_scheduler_type constant \
     --learning_rate 1e-4 \
     --dataloader_num_workers 8 \
     --disable_tqdm False \
     --load_best_model_at_end True \
+    --use_cache False \
     --cache_dir /data/james/.cache
 ```
 

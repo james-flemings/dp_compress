@@ -14,24 +14,24 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ModelArguments:
-    dataset: str = field(default="wikitext", metadata={
+    dataset: str = field(default="yelp", metadata={
         "help": "Name of dataset"
     })
 
-    subset: str = field(default="wikitext-103-raw-v1", metadata={
-        "help": "Subset of the dataset"
-    })
-
-    student_model: str = field(default="gpt2", metadata={
+    student_model: str = field(default="distilgpt2", metadata={
         "help": "Model name in HuggingFace, e.g. 'gpt2'"
     })
 
-    teacher_model: str = field(default="distilgpt2", metadata={
+    teacher_model: str = field(default="gpt2", metadata={
         "help": "Model name in HuggingFace, e.g. 'gpt2'"
     })
 
     sequence_len: int = field(default=128, metadata={
         "help": "Model sequence length"
+    })
+
+    use_cache: bool = field(default=False, metadata={
+        "help": "Whether to use cache directory"
     })
 
     cache_dir: str = field(default="/data/james/.cache", metadata={
@@ -127,16 +127,31 @@ def main(args: Arguments):
     logger.info(f"Training/evaluation parameters {train_args}")
     logger.info(f"Privacy parameters {privacy_args}")
 
-    tokenizer = transformers.AutoTokenizer.from_pretrained(args.model.teacher_model, cache_dir="/data/james/.cache")
+    if args.model.use_cache:
+        tokenizer = transformers.AutoTokenizer.from_pretrained(args.model.teacher_model, cache_dir="/data/james/.cache")
+    else:
+        tokenizer = transformers.AutoTokenizer.from_pretrained(args.model.teacher_model)
+
     teacher_model = 0 
     if tokenizer.pad_token_id: 
-        teacher_model = transformers.GPT2LMHeadModel.from_pretrained(args.model.teacher_model, cache_dir="/data/james/.cache",
+        if args.model.use_cache:
+            teacher_model = transformers.GPT2LMHeadModel.from_pretrained(args.model.teacher_model, cache_dir="/data/james/.cache",
+                                                             pad_token_id=tokenizer.pad_token_id)
+        else:
+            teacher_model = transformers.GPT2LMHeadModel.from_pretrained(args.model.teacher_model,
                                                              pad_token_id=tokenizer.pad_token_id)
     else:
-        teacher_model = transformers.GPT2LMHeadModel.from_pretrained(args.model.teacher_model, cache_dir="/data/james/.cache",
+        if args.model.use_cache:
+            teacher_model = transformers.GPT2LMHeadModel.from_pretrained(args.model.teacher_model, cache_dir="/data/james/.cache",
+                                                             pad_token_id=tokenizer.eos_token_id)  
+        else:
+            teacher_model = transformers.GPT2LMHeadModel.from_pretrained(args.model.teacher_model,
                                                              pad_token_id=tokenizer.eos_token_id)  
     # Load student model
-    student_model = transformers.GPT2LMHeadModel.from_pretrained(args.model.student_model, cache_dir=args.model.cache_dir)
+    if args.model.use_cache:
+        student_model = transformers.GPT2LMHeadModel.from_pretrained(args.model.student_model, cache_dir=args.model.cache_dir)
+    else:
+        student_model = transformers.GPT2LMHeadModel.from_pretrained(args.model.student_model)
 
     num_added_toks = tokenizer.add_special_tokens({'pad_token': '[PAD]'})
     teacher_mean_tok_emb = teacher_model.transformer.wte.weight.data.mean(dim=0)
@@ -164,31 +179,37 @@ def main(args: Arguments):
     student_model.cuda()
     student_model.train()
 
+    if args.model.use_cache:
+        dataset = datasets.load_dataset('csv', data_files={'train': args.model.synthetic_data_file}, cache_dir=args.model.cache_dir)
+    else:
+        dataset = datasets.load_dataset('csv', data_files={'train': args.model.synthetic_data_file})
+
+    label_column_names = [name for name in dataset["train"].column_names if "label" in name]
+
+    # Tokenize data
     def preprocess_function(examples):
         batch = []
-        for text in examples['text']:
-            batch.append(text + tokenizer.eos_token)
-        result = tokenizer(batch, padding="max_length", truncation=True, 
+        for t in range(len(examples['text'])):
+            text = "\t".join([examples[name][t] for name in label_column_names]) + "\n\n" + examples['text'][t] + tokenizer.eos_token
+            batch.append(text)
+
+        result = tokenizer(batch, padding="max_length", truncation=True,
                            max_length=args.model.sequence_len)
+
         result["labels"] = result["input_ids"].copy()
         return result
 
-    dataset = datasets.load_dataset("csv", data_files=args.model.synthetic_data_file,
-                                     cache_dir=args.model.cache_dir,
-                                     keep_in_memory=True)
-    # Tokenize Data
+    # Tokenize data
     with train_args.main_process_first(desc="tokenizing dataset"):
         dataset = dataset.map(
-            preprocess_function, batched=True, desc="tokenizing dataset", remove_columns=['prompt', 'ppl'],
-            num_proc=train_args.dataloader_num_workers
+            preprocess_function,
+            batched=True, 
+            num_proc=args.train.dataloader_num_workers,
+            desc="tokenizing dataset",
+            remove_columns=dataset.column_names['train']
         )
-
-    #teacher_model, _ = transformers.GPT2LMHeadModel._load_pretrained_model(
-    #    teacher_model, 
-    #    state_dict,
-    #    [k for k in state_dict.keys()],
-    #)
-    train_args.output_dir = os.path.join(train_args.output_dir, f'{args.model.student_model}-DPKD-syn-data')
+    output_name = f'{args.model.student_model}-{privacy_args.target_epsilon}-DPKD-syn-data'
+    train_args.output_dir = os.path.join(train_args.output_dir, output_name)
     trainer = DistilTrainer(
         student_model=student_model,
         teacher_model=teacher_model,
