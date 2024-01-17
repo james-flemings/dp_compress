@@ -96,7 +96,7 @@ class DistilTrainer(transformers.Trainer):
         student_target_loss = student_output.loss
 
         # Calculate final loss
-        loss = (1. - self.lambda_param) * student_target_loss + self.lambda_param * distillation_loss
+        loss = (1 - self.lambda_param) * student_target_loss + self.lambda_param * distillation_loss
         return (loss, student_output) if return_outputs else loss
 
 
@@ -184,6 +184,7 @@ def main(args: Arguments):
     else:
         dataset = datasets.load_dataset('csv', data_files={'train': args.model.synthetic_data_file})
 
+    dataset = dataset['train'].train_test_split(test_size=0.05)
     label_column_names = [name for name in dataset["train"].column_names if "label" in name]
 
     # Tokenize data
@@ -215,7 +216,7 @@ def main(args: Arguments):
         teacher_model=teacher_model,
         args=train_args,
         train_dataset=dataset["train"],
-        eval_dataset=None,
+        eval_dataset=dataset['test'],
         data_collator=transformers.DefaultDataCollator(),
         tokenizer=tokenizer,
         temperature=args.model.temperature,

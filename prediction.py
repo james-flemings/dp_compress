@@ -9,10 +9,12 @@ from tqdm import tqdm
 def main(args):
     if args.use_cache:
         teacher_model_6_dp = transformers.GPT2LMHeadModel.from_pretrained(args.teacher_model_type, cache_dir=args.cache_dir)
+        student_model_dpsgd = transformers.GPT2LMHeadModel.from_pretrained(args.student_model_type, cache_dir=args.cache_dir)
         teacher_pre_trained_model = transformers.GPT2LMHeadModel.from_pretrained(args.teacher_model_type, cache_dir=args.cache_dir) 
         student_pre_trained_model = transformers.GPT2LMHeadModel.from_pretrained(args.student_model_type, cache_dir=args.cache_dir) 
     else:
         teacher_model_6_dp = transformers.GPT2LMHeadModel.from_pretrained(args.teacher_model_type)
+        student_model_dpsgd = transformers.GPT2LMHeadModel.from_pretrained(args.student_model_type)
         teacher_pre_trained_model = transformers.GPT2LMHeadModel.from_pretrained(args.teacher_model_type) 
         student_pre_trained_model = transformers.GPT2LMHeadModel.from_pretrained(args.student_model_type) 
     student_model_syn = transformers.GPT2LMHeadModel.from_pretrained(args.syn_data_student_file, local_files_only=True)
@@ -35,22 +37,34 @@ def main(args):
         #student_pre_trained_model.transformer.wte.weight.data[-(i + 1), :] = student_mean_tok_emb
         teacher_model_6_dp.transformer.wte.weight.data[-(i + 1), :] = teacher_mean_tok_emb
         student_model_syn.transformer.wte.weight.data[-(i + 1), :] = student_mean_tok_emb
+        student_model_dpsgd.transformer.wte.weight.data[-(i + 1), :] = student_mean_tok_emb
 
     teacher_model_6_dp.resize_token_embeddings(len(teacher_tokenizer))
     teacher_pre_trained_model.resize_token_embeddings(len(teacher_tokenizer))
     #student_pre_trained_model.resize_token_embeddings(len(student_tokenizer))
     student_model_syn.resize_token_embeddings(len(teacher_tokenizer))
+    student_model_dpsgd.resize_token_embeddings(len(student_tokenizer))
 
+    # Load dp weights for teacher
     sd = torch.load(os.path.join(args.syn_data_teacher_file, "pytorch_model.bin"), map_location="cpu")
     state_dict = {}
     for key, value in sd.items():
         key = key.replace("_module.module.", "")
         state_dict[key] = value
-
     teacher_model_6_dp.load_state_dict(state_dict)
+
+    # Load dp weights for student  
+    sd = torch.load(os.path.join(args.dpsgd_student_file, "pytorch_model.bin"), map_location="cpu")
+    state_dict = {}
+    for key, value in sd.items():
+        key = key.replace("_module.module.", "")
+        state_dict[key] = value
+    student_model_dpsgd.load_state_dict(state_dict)
+
     #teacher_model_6_dp.tie_weights()
     teacher_model_6_dp = teacher_model_6_dp.to(args.device)
     student_model_syn = student_model_syn.to(args.device)
+    student_model_dpsgd = student_model_dpsgd.to(args.device)
     teacher_pre_trained_model = teacher_pre_trained_model.to(args.device)
     student_pre_trained_model = student_pre_trained_model.to(args.device)
 
@@ -101,12 +115,15 @@ def main(args):
     trainer_teacher_pre = transformers.Trainer(model=teacher_pre_trained_model, args=train_args)
     trainer_student_pre = transformers.Trainer(model=student_pre_trained_model, args=train_args)
     trainer_student_syn = transformers.Trainer(model=student_model_syn, args=train_args)
+    trainer_student_dpsgd = transformers.Trainer(model=student_model_dpsgd, args=train_args)
     print(f"Test set perplexity of pre-trained Teacher model \
           {math.exp(trainer_teacher_pre.evaluate(eval_dataset=teacher_dataset)['eval_loss']):.2f}")
     print(f"Test set perplexity of Teacher model with DP-SGD ε = {args.target_epsilon} \
            {math.exp(trainer_teacher_6_dp.evaluate(eval_dataset=teacher_dataset)['eval_loss']):.2f}")
     print(f"Test set perplexity of pre-trained Student model \
           {math.exp(trainer_student_pre.evaluate(eval_dataset=student_dataset)['eval_loss']):.2f}")
+    print(f"Test set perplexity of Student model trained with just DP-SGD ε = {args.target_epsilon} \
+          {math.exp(trainer_student_dpsgd.evaluate(eval_dataset=student_dataset)['eval_loss']):.2f}")
     print(f"Test set perplexity of Student model trained with synthetic data \
           {math.exp(trainer_student_syn.evaluate(eval_dataset=teacher_dataset)['eval_loss']):.2f}")
 
@@ -145,6 +162,12 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--syn_data_student_file",
+        type=str,
+        default=None,
+        required=True
+    )
+    parser.add_argument(
+        "--dpsgd_student_file",
         type=str,
         default=None,
         required=True

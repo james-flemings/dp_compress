@@ -25,7 +25,7 @@ class ModelArguments:
     sequence_len: int = field(default=128, metadata={
         "help": "Model sequence length"
     })
-    use_cache: bool = field(default=True, metadata={
+    use_cache: bool = field(default=False, metadata={
         "help": "Whether to use cache directory or not"
     })
     cache_dir: str = field(default="/data/james/.cache", metadata={
