@@ -43,7 +43,7 @@ Command for generating synthetic data:
 ```bash
 python generate_text.py \
     --model_type gpt2-large \
-    --pytorch_checkpoint models/pytorch_model.bin \
+    --pytorch_checkpoint models/gpt2-large-yelp-2.0-dp/pytorch_model.bin \
     --input_training_file dataset/train.csv \
     --output_dir dataset \
     --cache_dir /data/james/.cache \
@@ -51,6 +51,7 @@ python generate_text.py \
     --seq_len 128 \
     --total_sequences 100000 \
     --do_sample \
+    --epsilon 2.0 \
     --device cuda:0 
 ```
 
@@ -61,28 +62,28 @@ python -m torch.distributed.run --nproc_per_node=8 knowledge_distil.py \
     --output_dir models \
     --student_model distilgpt2 \
     --teacher_model gpt2-large \
-    --pytorch_checkpoint models/gpt2-large-yelp-4.0-dp/pytorch_model.bin \
-    --synthetic_data_file dataset/128_yelp_synthetic_data.csv \
+    --pytorch_checkpoint models/gpt2-large-yelp-2.0-dp/pytorch_model.bin \
+    --synthetic_data_file dataset/128_yelp_2.0_dp_synthetic_data.csv \
     --sequence_len 128 \
     --lambda_param 0.4 \
-    --temperature 1.0 \
+    --temperature 2.0 \
     --per_device_train_batch_size 16 \
     --gradient_accumulation_steps 1 \
     --evaluation_strategy epoch \
     --save_strategy epoch \
     --log_level info \
-    --per_device_eval_batch_size 8 \
+    --per_device_eval_batch_size 16 \
     --eval_accumulation_steps 1 \
     --seed 42 \
-    --target_epsilon 4.0 \
+    --target_epsilon 2.0 \
     --per_sample_max_grad_norm 1.0 \
     --weight_decay 0.01 \
     --remove_unused_columns False \
-    --num_train_epochs 20 \
-    --logging_steps 10 \
+    --num_train_epochs 10 \
+    --logging_steps 50 \
     --max_grad_norm 0.0 \
     --lr_scheduler_type constant \
-    --learning_rate 1e-4 \
+    --learning_rate 8e-5 \
     --dataloader_num_workers 8 \
     --disable_tqdm False \
     --load_best_model_at_end True \
@@ -99,10 +100,11 @@ python prediction.py \
     --teacher_model_type gpt2-large \
     --student_model_type distilgpt2 \
     --syn_data_teacher_file models/gpt2-large-yelp-4.0-dp \
-    --syn_data_student_file models/distilgpt2-4.0-DPKD-syn-data \
-    --dpsgd_student_file models/distilgpt2-yelp-4.0-dp \
+    --syn_data_student_file models/distilgpt2-yelp-2.0-DPKD-syn-data \
+    --dpkd_teacher_file models/gpt2-large-yelp-2.0-dp \
+    --dpsgd_student_file models/distilgpt2-yelp-2.0-dp \
     --cache_dir /data/james/.cache \
     --device cuda:0 \
     --sequence_len 128 \
-    --target_epsilon 4.0
+    --target_epsilon 2.0
 ```

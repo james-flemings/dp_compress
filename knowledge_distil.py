@@ -66,8 +66,9 @@ class DistilTrainer(transformers.Trainer):
     '''
     def __init__(self, teacher_model=None,
                  student_model=None,
-                 temperature=None, 
-                 lambda_param=None, 
+                 temperature=0, 
+                 lambda_param=0,
+                 alpha_cos=0,
                  *args, **kwargs):
         super().__init__(model=student_model, *args, **kwargs)
         self.teacher = teacher_model
@@ -80,10 +81,10 @@ class DistilTrainer(transformers.Trainer):
         '''
         Knowledge Distillation from https://arxiv.org/pdf/1503.02531.pdf 
         '''
-        student_output = self.student(**inputs)
+        student_output = self.student(**inputs, output_hidden_states=True)
 
         with torch.no_grad():
-          teacher_output = self.teacher(**inputs)
+          teacher_output = self.teacher(**inputs, output_hidden_states=True)
 
         # Compute soft targets for teacher and student
         soft_teacher = F.softmax(teacher_output.logits / self.temperature, dim=-1)
@@ -96,9 +97,9 @@ class DistilTrainer(transformers.Trainer):
         student_target_loss = student_output.loss
 
         # Calculate final loss
-        loss = (1 - self.lambda_param) * student_target_loss + self.lambda_param * distillation_loss
+        loss = (1-self.lambda_param) * student_target_loss  \
+            + self.lambda_param * distillation_loss 
         return (loss, student_output) if return_outputs else loss
-
 
 def main(args: Arguments):
     transformers.set_seed(args.train.seed)
@@ -184,7 +185,7 @@ def main(args: Arguments):
     else:
         dataset = datasets.load_dataset('csv', data_files={'train': args.model.synthetic_data_file})
 
-    dataset = dataset['train'].train_test_split(test_size=0.05)
+    dataset = dataset['train'].train_test_split(test_size=0.01)
     label_column_names = [name for name in dataset["train"].column_names if "label" in name]
 
     # Tokenize data
@@ -220,11 +221,10 @@ def main(args: Arguments):
         data_collator=transformers.DefaultDataCollator(),
         tokenizer=tokenizer,
         temperature=args.model.temperature,
-        lambda_param=args.model.lambda_param
+        lambda_param=args.model.lambda_param,
     )
     trainer.train()
     trainer.save_model()
-
 
 if __name__ == "__main__":
     arg_parser = transformers.HfArgumentParser((dp_transformers.TrainingArguments, dp_transformers.PrivacyArguments, ModelArguments))

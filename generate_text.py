@@ -136,7 +136,7 @@ def main(args):
     logger.info(f"Total generated sequences: %d", len(all_sequences))
     random.shuffle(all_sequences)
 
-    output_name = str(args.seq_len) + "_" + args.dataset + "_synthetic_data.csv" 
+    output_name = f"{args.seq_len}_{args.dataset}_{args.epsilon}_dp_synthetic_data.csv" 
     output_path = os.path.join(args.output_dir, output_name)
     with open(output_path, 'w', encoding='utf-8') as wf:
         csv_writer = csv.writer(wf)
@@ -204,6 +204,7 @@ if __name__ == "__main__":
     parser.add_argument("--k", type=int, default=50)
     parser.add_argument("--p", type=float, default=0.9)
     parser.add_argument("--batch_size", type=int, default=8)
+    parser.add_argument("--epsilon", type=float, default=2.0)
     parser.add_argument("--seed", default=0)
     parser.add_argument("--num_return_sequences", type=int, default=2)
     parser.add_argument("--total_sequences", type=int, default=100000)
