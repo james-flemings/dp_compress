@@ -91,10 +91,46 @@ python -m torch.distributed.run --nproc_per_node=8 knowledge_distil.py \
     --cache_dir /data/james/.cache
 ```
 
-Command for running prediction
+Command for performing differentially private knowledge distillation:
+```bash
+python -m torch.distributed.run --nproc_per_node=8 dp_kd.py \
+    --data_dir dataset \
+    --dataset_name yelp \
+    --output_dir models \
+    --student_model distilgpt2 \
+    --teacher_model gpt2-large \
+    --pytorch_checkpoint models/gpt2-large-yelp-2.0-dp/pytorch_model.bin \
+    --sequence_len 128 \
+    --lambda_param 0.4 \
+    --temperature 2.0 \
+    --per_device_train_batch_size 8 \
+    --gradient_accumulation_steps 64 \
+    --evaluation_strategy epoch \
+    --save_strategy epoch \
+    --log_level info \
+    --per_device_eval_batch_size 16 \
+    --eval_accumulation_steps 1 \
+    --seed 42 \
+    --target_epsilon 1.0 \
+    --per_sample_max_grad_norm 1.0 \
+    --weight_decay 0.01 \
+    --remove_unused_columns False \
+    --num_train_epochs 1 \
+    --logging_steps 50 \
+    --max_grad_norm 0.0 \
+    --lr_scheduler_type constant \
+    --learning_rate 1e-4 \
+    --dataloader_num_workers 8 \
+    --disable_tqdm False \
+    --load_best_model_at_end True \
+    --use_cache False \
+    --cache_dir /data/james/.cache
+```
+
+Command for running performance results 
 
 ```bash
-python prediction.py \
+python results.py \
     --input_test_file dataset \
     --output_dir models \
     --teacher_model_type gpt2-large \

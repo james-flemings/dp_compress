@@ -13,7 +13,11 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ModelArguments:
-    dataset: str = field(default="yelp", metadata={
+    data_dir: str = field(default="./", metadata={
+        "help": "Name of dataset"
+    })
+
+    dataset_name: str = field(default="yelp", metadata={
         "help": "Name of dataset"
     })
 
@@ -49,17 +53,13 @@ class ModelArguments:
         "help": "Temperature parameter"
     })
 
-    synthetic_data_file: str = field(default="data/james/synthetic_data.csv", metadata={
-        "help": "File path to synthetic dataset"
-    })
-
 @dataclass
 class Arguments:
     train: dp_transformers.TrainingArguments
     privacy: dp_transformers.PrivacyArguments
     model: ModelArguments
 
-class DistilTrainer(transformers.Trainer):
+class DPDistilTrainer(dp_transformers.dp_utils.OpacusDPTrainer):
     '''
     Code grabbed from: https://huggingface.co/docs/transformers/main/tasks/knowledge_distillation_for_image_classification
     '''
@@ -98,7 +98,7 @@ class DistilTrainer(transformers.Trainer):
         loss = (1-self.lambda_param) * student_target_loss  \
             + self.lambda_param * distillation_loss 
         return (loss, student_output) if return_outputs else loss
-
+    
 def main(args: Arguments):
     transformers.set_seed(args.train.seed)
     train_args = args.train
@@ -178,12 +178,14 @@ def main(args: Arguments):
     student_model.cuda()
     student_model.train()
 
+    # Load dataset
+    data_path_train = os.path.join(args.model.data_dir, "train.csv")
+    data_path_val = os.path.join(args.model.data_dir, "val.csv")
     if args.model.use_cache:
-        dataset = datasets.load_dataset('csv', data_files={'train': args.model.synthetic_data_file}, cache_dir=args.model.cache_dir)
+        dataset = datasets.load_dataset('csv', data_files={'train': data_path_train, 'validation': data_path_val}, cache_dir=args.model.cache_dir)
     else:
-        dataset = datasets.load_dataset('csv', data_files={'train': args.model.synthetic_data_file})
+        dataset = datasets.load_dataset('csv', data_files={'train': data_path_train, 'validation': data_path_val})
 
-    dataset = dataset['train'].train_test_split(test_size=0.01)
     label_column_names = [name for name in dataset["train"].column_names if "label" in name]
 
     # Tokenize data
@@ -208,21 +210,35 @@ def main(args: Arguments):
             desc="tokenizing dataset",
             remove_columns=dataset.column_names['train']
         )
-    output_name = f'{args.model.student_model}-{args.model.dataset}-{privacy_args.target_epsilon}-DPKD-syn-data'
+    output_name = f'{args.model.student_model}-{args.model.dataset_name}-{privacy_args.target_epsilon}-DPKD-syn-data'
     train_args.output_dir = os.path.join(train_args.output_dir, output_name)
-    trainer = DistilTrainer(
+    data_collator = dp_transformers.DataCollatorForPrivateCausalLanguageModeling(tokenizer)
+    trainer = DPDistilTrainer(
         student_model=student_model,
         teacher_model=teacher_model,
         args=train_args,
+        privacy_args=privacy_args,
         train_dataset=dataset["train"],
-        eval_dataset=dataset['test'],
-        data_collator=transformers.DefaultDataCollator(),
+        eval_dataset=dataset['validation'],
+        data_collator=data_collator,
         tokenizer=tokenizer,
         temperature=args.model.temperature,
         lambda_param=args.model.lambda_param,
     )
-    trainer.train()
-    trainer.save_model()
+    try:
+        train_result = trainer.train()
+    finally:
+        eps_prv = trainer.get_prv_epsilon()
+        eps_rdp = trainer.get_rdp_epsilon()
+        trainer.log({
+            "final_epsilon_prv": eps_prv,
+            "final_epsilon_rdp": eps_rdp
+        })
+    if train_args.local_rank == 0 or train_args.local_rank == -1:
+        metrics = train_result.metrics
+        trainer.save_model()
+        trainer.log_metrics("train", metrics)
+        trainer.save_metrics("train", metrics)
 
 if __name__ == "__main__":
     arg_parser = transformers.HfArgumentParser((dp_transformers.TrainingArguments, dp_transformers.PrivacyArguments, ModelArguments))
