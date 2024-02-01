@@ -49,7 +49,7 @@ python generate_text.py \
     --cache_dir /data/james/.cache \
     --dataset yelp \
     --seq_len 128 \
-    --total_sequences 100000 \
+    --total_sequences 400000 \
     --do_sample \
     --epsilon 2.0 \
     --device cuda:0 
@@ -65,7 +65,7 @@ python -m torch.distributed.run --nproc_per_node=8 knowledge_distil.py \
     --pytorch_checkpoint models/gpt2-large-yelp-2.0-dp/pytorch_model.bin \
     --synthetic_data_file dataset/128_yelp_2.0_dp_synthetic_data.csv \
     --sequence_len 128 \
-    --lambda_param 0.4 \
+    --lambda_param 0. \
     --temperature 2.0 \
     --per_device_train_batch_size 16 \
     --gradient_accumulation_steps 1 \
@@ -79,7 +79,7 @@ python -m torch.distributed.run --nproc_per_node=8 knowledge_distil.py \
     --per_sample_max_grad_norm 1.0 \
     --weight_decay 0.01 \
     --remove_unused_columns False \
-    --num_train_epochs 10 \
+    --num_train_epochs 1 \
     --logging_steps 50 \
     --max_grad_norm 0.0 \
     --lr_scheduler_type constant \
@@ -130,14 +130,15 @@ python -m torch.distributed.run --nproc_per_node=8 dp_kd.py \
 Command for running performance results 
 
 ```bash
-python results.py \
+CUDA_VISIBLE_DEVICES=1 python results.py \
     --input_test_file dataset \
     --output_dir models \
     --teacher_model_type gpt2-large \
     --student_model_type distilgpt2 \
-    --syn_data_teacher_file models/gpt2-large-yelp-4.0-dp \
-    --syn_data_student_file models/distilgpt2-yelp-2.0-DPKD-syn-data \
-    --dpkd_teacher_file models/gpt2-large-yelp-2.0-dp \
+    --syn_data_teacher_file models/gpt2-large-yelp-2.0-dp \
+    --syn_data_student_file models/best-distilgpt2-yelp-2.0-DPKD-syn-data \
+    --dpkd_teacher_file models/gpt2-large-yelp-1.0-dp \
+    --dpkd_student_file models/distilgpt2-yelp-2.0-DPKD \
     --dpsgd_student_file models/distilgpt2-yelp-2.0-dp \
     --cache_dir /data/james/.cache \
     --device cuda:0 \

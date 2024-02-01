@@ -189,10 +189,12 @@ def main(args: Arguments):
     # Tokenize data
     def preprocess_function(examples):
         batch = []
+        '''
         for t in range(len(examples['text'])):
             text = "\t".join([examples[name][t] for name in label_column_names]) + "\n\n" + examples['text'][t] + tokenizer.eos_token
             batch.append(text)
-
+        '''
+        batch = examples['text']
         result = tokenizer(batch, padding="max_length", truncation=True,
                            max_length=args.model.sequence_len)
 

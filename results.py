@@ -8,14 +8,16 @@ from tqdm import tqdm
 
 def main(args):
     if args.use_cache:
-        teacher_model_4_dp = transformers.GPT2LMHeadModel.from_pretrained(args.teacher_model_type, cache_dir=args.cache_dir)
-        teacher_model_2_dp = transformers.GPT2LMHeadModel.from_pretrained(args.teacher_model_type, cache_dir=args.cache_dir)
+        teacher_model_syn_data = transformers.GPT2LMHeadModel.from_pretrained(args.teacher_model_type, cache_dir=args.cache_dir)
+        teacher_model_dpkd = transformers.GPT2LMHeadModel.from_pretrained(args.teacher_model_type, cache_dir=args.cache_dir)
+        student_model_dpkd = transformers.GPT2LMHeadModel.from_pretrained(args.student_model_type, cache_dir=args.cache_dir)
         student_model_dpsgd = transformers.GPT2LMHeadModel.from_pretrained(args.student_model_type, cache_dir=args.cache_dir)
         teacher_pre_trained_model = transformers.GPT2LMHeadModel.from_pretrained(args.teacher_model_type, cache_dir=args.cache_dir) 
         student_pre_trained_model = transformers.GPT2LMHeadModel.from_pretrained(args.student_model_type, cache_dir=args.cache_dir) 
     else:
-        teacher_model_4_dp = transformers.GPT2LMHeadModel.from_pretrained(args.teacher_model_type)
-        teacher_model_2_dp = transformers.GPT2LMHeadModel.from_pretrained(args.teacher_model_type)
+        teacher_model_syn_data = transformers.GPT2LMHeadModel.from_pretrained(args.teacher_model_type)
+        teacher_model_dpkd = transformers.GPT2LMHeadModel.from_pretrained(args.teacher_model_type)
+        student_model_dpkd = transformers.GPT2LMHeadModel.from_pretrained(args.student_model_type)
         student_model_dpsgd = transformers.GPT2LMHeadModel.from_pretrained(args.student_model_type)
         teacher_pre_trained_model = transformers.GPT2LMHeadModel.from_pretrained(args.teacher_model_type) 
         student_pre_trained_model = transformers.GPT2LMHeadModel.from_pretrained(args.student_model_type) 
@@ -37,33 +39,43 @@ def main(args):
     for i in range(num_added_toks):
         teacher_pre_trained_model.transformer.wte.weight.data[-(i + 1), :] = teacher_mean_tok_emb
         #student_pre_trained_model.transformer.wte.weight.data[-(i + 1), :] = student_mean_tok_emb
-        teacher_model_4_dp.transformer.wte.weight.data[-(i + 1), :] = teacher_mean_tok_emb
-        teacher_model_2_dp.transformer.wte.weight.data[-(i + 1), :] = teacher_mean_tok_emb
+        teacher_model_syn_data.transformer.wte.weight.data[-(i + 1), :] = teacher_mean_tok_emb
+        teacher_model_dpkd.transformer.wte.weight.data[-(i + 1), :] = teacher_mean_tok_emb
+        student_model_dpkd.transformer.wte.weight.data[-(i + 1), :] = student_mean_tok_emb
         student_model_syn.transformer.wte.weight.data[-(i + 1), :] = student_mean_tok_emb
         student_model_dpsgd.transformer.wte.weight.data[-(i + 1), :] = student_mean_tok_emb
 
-    teacher_model_4_dp.resize_token_embeddings(len(teacher_tokenizer))
-    teacher_model_2_dp.resize_token_embeddings(len(teacher_tokenizer))
+    teacher_model_syn_data.resize_token_embeddings(len(teacher_tokenizer))
+    teacher_model_dpkd.resize_token_embeddings(len(teacher_tokenizer))
+    student_model_dpkd.resize_token_embeddings(len(student_tokenizer))
     teacher_pre_trained_model.resize_token_embeddings(len(teacher_tokenizer))
     #student_pre_trained_model.resize_token_embeddings(len(student_tokenizer))
     student_model_syn.resize_token_embeddings(len(teacher_tokenizer))
     student_model_dpsgd.resize_token_embeddings(len(student_tokenizer))
 
-    # Load dp weights for teacher
+    # Load dp weights for teacher synthetic data
     sd = torch.load(os.path.join(args.syn_data_teacher_file, "pytorch_model.bin"), map_location="cpu")
     state_dict = {}
     for key, value in sd.items():
         key = key.replace("_module.module.", "")
         state_dict[key] = value
-    teacher_model_4_dp.load_state_dict(state_dict)
+    teacher_model_syn_data.load_state_dict(state_dict)
 
-    # Load dp weights for teacher
+    # Load dp weights for teacher dpkd
     sd = torch.load(os.path.join(args.dpkd_teacher_file, "pytorch_model.bin"), map_location="cpu")
     state_dict = {}
     for key, value in sd.items():
         key = key.replace("_module.module.", "")
         state_dict[key] = value
-    teacher_model_2_dp.load_state_dict(state_dict)
+    teacher_model_dpkd.load_state_dict(state_dict)
+
+    # Load dp weights for student dpkd
+    sd = torch.load(os.path.join(args.dpkd_student_file, "pytorch_model.bin"), map_location="cpu")
+    state_dict = {}
+    for key, value in sd.items():
+        key = key.replace("_module.module.", "")
+        state_dict[key] = value
+    student_model_dpkd.load_state_dict(state_dict)
 
     # Load dp weights for student  
     sd = torch.load(os.path.join(args.dpsgd_student_file, "pytorch_model.bin"), map_location="cpu")
@@ -73,9 +85,10 @@ def main(args):
         state_dict[key] = value
     student_model_dpsgd.load_state_dict(state_dict)
 
-    #teacher_model_4_dp.tie_weights()
-    teacher_model_4_dp = teacher_model_4_dp.to(args.device)
-    teacher_model_2_dp = teacher_model_2_dp.to(args.device)
+    #teacher_model_syn_data.tie_weights()
+    teacher_model_syn_data = teacher_model_syn_data.to(args.device)
+    teacher_model_dpkd = teacher_model_dpkd.to(args.device)
+    student_model_dpkd = student_model_dpkd.to(args.device)
     student_model_syn = student_model_syn.to(args.device)
     student_model_dpsgd = student_model_dpsgd.to(args.device)
     teacher_pre_trained_model = teacher_pre_trained_model.to(args.device)
@@ -93,14 +106,15 @@ def main(args):
     block_size = args.sequence_len
 
     def group_function(examples, tokenizer):
-        batch = []
-        for t in range(len(examples['text'])):
-            text = "\t".join([examples[name][t] for name in label_column_names]) + "\n\n" + examples['text'][t] + tokenizer.eos_token
-            batch.append(text)
+        batch = examples
+        #batch = []
+        #for t in range(len(examples['text'])):
+        #    text = "\t".join([examples[name][t] for name in label_column_names]) + "\n\n" + examples['text'][t] + tokenizer.eos_token
+        #    batch.append(text)
 
         #result = tokenizer(batch, padding="max_length", truncation=True,
         #                   max_length=args.sequence_len)
-        result = tokenizer(batch)
+        result = tokenizer(batch['text'])
         concatenated_examples = {k: sum(result[k], []) for k in result.keys()}
         total_length = len(concatenated_examples[list(result.keys())[0]])
         total_length = (total_length // block_size) * block_size
@@ -124,24 +138,27 @@ def main(args):
     )
 
     train_args = transformers.TrainingArguments(output_dir=args.output_dir, per_device_eval_batch_size=4, label_names=['labels'])
-    trainer_teacher_4_dp = transformers.Trainer(model=teacher_model_4_dp, args=train_args)
-    trainer_teacher_2_dp = transformers.Trainer(model=teacher_model_2_dp, args=train_args)
+    trainer_teacher_syn_data = transformers.Trainer(model=teacher_model_syn_data, args=train_args)
+    trainer_teacher_dpkd = transformers.Trainer(model=teacher_model_dpkd, args=train_args)
+    trainer_student_dpkd = transformers.Trainer(model=student_model_dpkd, args=train_args)
     trainer_teacher_pre = transformers.Trainer(model=teacher_pre_trained_model, args=train_args)
     trainer_student_pre = transformers.Trainer(model=student_pre_trained_model, args=train_args)
     trainer_student_syn = transformers.Trainer(model=student_model_syn, args=train_args)
     trainer_student_dpsgd = transformers.Trainer(model=student_model_dpsgd, args=train_args)
+    print(f"Test set perplexity of Student model with DPKD ε = {args.target_epsilon} \
+           {math.exp(trainer_student_dpkd.evaluate(eval_dataset=student_dataset)['eval_loss']):.2f}")
     print(f"Test set perplexity of Student model trained with synthetic data \
           {math.exp(trainer_student_syn.evaluate(eval_dataset=teacher_dataset)['eval_loss']):.2f}")
-    print(f"Test set perplexity of pre-trained Student model \
-          {math.exp(trainer_student_pre.evaluate(eval_dataset=student_dataset)['eval_loss']):.2f}")
     print(f"Test set perplexity of Student model trained with just DP-SGD ε = {args.target_epsilon} \
           {math.exp(trainer_student_dpsgd.evaluate(eval_dataset=student_dataset)['eval_loss']):.2f}")
+    print(f"Test set perplexity of pre-trained Student model \
+          {math.exp(trainer_student_pre.evaluate(eval_dataset=student_dataset)['eval_loss']):.2f}")
     print(f"Test set perplexity of pre-trained Teacher model \
           {math.exp(trainer_teacher_pre.evaluate(eval_dataset=teacher_dataset)['eval_loss']):.2f}")
     print(f"Test set perplexity of Teacher model with DP-SGD ε = {args.target_epsilon/2} \
-           {math.exp(trainer_teacher_2_dp.evaluate(eval_dataset=teacher_dataset)['eval_loss']):.2f}")
+           {math.exp(trainer_teacher_dpkd.evaluate(eval_dataset=teacher_dataset)['eval_loss']):.2f}")
     print(f"Test set perplexity of Teacher model with DP-SGD ε = {args.target_epsilon} \
-           {math.exp(trainer_teacher_4_dp.evaluate(eval_dataset=teacher_dataset)['eval_loss']):.2f}")
+           {math.exp(trainer_teacher_syn_data.evaluate(eval_dataset=teacher_dataset)['eval_loss']):.2f}")
 
 
 if __name__ == "__main__":
@@ -178,6 +195,12 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--dpkd_teacher_file",
+        type=str,
+        default=None,
+        required=True
+    )
+    parser.add_argument(
+        "--dpkd_student_file",
         type=str,
         default=None,
         required=True

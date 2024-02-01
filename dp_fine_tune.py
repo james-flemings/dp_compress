@@ -25,6 +25,9 @@ class ModelArguments:
     sequence_len: int = field(default=128, metadata={
         "help": "Model sequence length"
     })
+    use_cc: bool = field(default=False, metadata={
+        "help": "Whether to use control codes"
+    })
     use_cache: bool = field(default=False, metadata={
         "help": "Whether to use cache directory or not"
     })
@@ -96,10 +99,12 @@ def main(args: Arguments):
     # Tokenize data
     def preprocess_function(examples):
         batch = []
-        for t in range(len(examples['text'])):
-            text = "\t".join([examples[name][t] for name in label_column_names]) + "\n\n" + examples['text'][t] + tokenizer.eos_token
-            batch.append(text)
-
+        if args.model.use_cc:
+            for t in range(len(examples['text'])):
+                text = "\t".join([examples[name][t] for name in label_column_names]) + "\n\n" + examples['text'][t] + tokenizer.eos_token
+                batch.append(text)
+        else:
+            batch = examples['text']
         result = tokenizer(batch, padding="max_length", truncation=True,
                            max_length=args.model.sequence_len)
 
@@ -118,7 +123,11 @@ def main(args: Arguments):
     model = model.cuda()
     model.train()
     train_args.label_names = ['labels']
-    train_args.output_dir = os.path.join(train_args.output_dir, f"{args.model.model_name}-{args.model.dataset_name}-{args.privacy.target_epsilon}-dp")
+    if args.model.use_cc:
+        dir_name = f"cc-{args.model.model_name}-{args.model.dataset_name}-{args.privacy.target_epsilon}-dp"
+    else:
+        dir_name = f"{args.model.model_name}-{args.model.dataset_name}-{args.privacy.target_epsilon}-dp"
+    train_args.output_dir = os.path.join(train_args.output_dir, dir_name)
     data_collator = dp_transformers.DataCollatorForPrivateCausalLanguageModeling(tokenizer)
     trainer = dp_transformers.dp_utils.OpacusDPTrainer(
         args=train_args,
