@@ -89,7 +89,7 @@ class DistilTrainer(transformers.Trainer):
         soft_student = F.log_softmax(student_output.logits / self.temperature, dim=-1)
 
         # Compute the loss
-        distillation_loss = self.loss_function(soft_student, soft_teacher) * (self.temperature ** 2)
+        distillation_loss = self.loss_function(soft_student[:, 5:], soft_teacher[:, 5:]) * (self.temperature ** 2)
 
         # Compute the true label loss
         student_target_loss = student_output.loss
