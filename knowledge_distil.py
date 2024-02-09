@@ -181,9 +181,12 @@ def main(args: Arguments):
     if args.model.use_cache:
         dataset = datasets.load_dataset('csv', data_files={'train': args.model.synthetic_data_file}, cache_dir=args.model.cache_dir)
     else:
-        dataset = datasets.load_dataset('csv', data_files={'train': args.model.synthetic_data_file})
+        #dataset = datasets.load_dataset('csv', data_files={'train': args.model.synthetic_data_file}, split='train[:100000]')
+        dataset = datasets.load_dataset('csv', data_files={'train': args.model.synthetic_data_file, 
+                                                           'test': 'dataset/val.csv'},)
 
-    dataset = dataset['train'].train_test_split(test_size=0.01)
+    #dataset = dataset['train'].train_test_split(test_size=0.01)
+    #dataset = dataset.train_test_split(test_size=0.01)
     label_column_names = [name for name in dataset["train"].column_names if "label" in name]
 
     # Tokenize data
@@ -210,6 +213,7 @@ def main(args: Arguments):
             desc="tokenizing dataset",
             remove_columns=dataset.column_names['train']
         )
+    #train_args.label_names = ['input_ids']
     output_name = f'{args.model.student_model}-{args.model.dataset}-{privacy_args.target_epsilon}-DPKD-syn-data'
     train_args.output_dir = os.path.join(train_args.output_dir, output_name)
     trainer = DistilTrainer(

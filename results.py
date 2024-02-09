@@ -145,14 +145,14 @@ def main(args):
     trainer_student_pre = transformers.Trainer(model=student_pre_trained_model, args=train_args)
     trainer_student_syn = transformers.Trainer(model=student_model_syn, args=train_args)
     trainer_student_dpsgd = transformers.Trainer(model=student_model_dpsgd, args=train_args)
-    print(f"Test set perplexity of Student model trained with synthetic data \
-          {math.exp(trainer_student_syn.evaluate(eval_dataset=teacher_dataset)['eval_loss']):.2f}")
-    print(f"Test set perplexity of Student model trained with just DP-SGD ε = {args.target_epsilon} \
-          {math.exp(trainer_student_dpsgd.evaluate(eval_dataset=student_dataset)['eval_loss']):.2f}")
     print(f"Test set perplexity of Student model with DPKD ε = {args.target_epsilon} \
            {math.exp(trainer_student_dpkd.evaluate(eval_dataset=student_dataset)['eval_loss']):.2f}")
+    print(f"Test set perplexity of Student model trained with synthetic data \
+          {math.exp(trainer_student_syn.evaluate(eval_dataset=teacher_dataset)['eval_loss']):.2f}")
     print(f"Test set perplexity of pre-trained Student model \
           {math.exp(trainer_student_pre.evaluate(eval_dataset=student_dataset)['eval_loss']):.2f}")
+    print(f"Test set perplexity of Student model trained with just DP-SGD ε = {args.target_epsilon} \
+          {math.exp(trainer_student_dpsgd.evaluate(eval_dataset=student_dataset)['eval_loss']):.2f}")
     print(f"Test set perplexity of pre-trained Teacher model \
           {math.exp(trainer_teacher_pre.evaluate(eval_dataset=teacher_dataset)['eval_loss']):.2f}")
     print(f"Test set perplexity of Teacher model with DP-SGD ε = {args.target_epsilon/2} \

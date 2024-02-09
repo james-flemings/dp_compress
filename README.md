@@ -10,29 +10,29 @@ git submodule update
 Command to run for fine-tuning:
 ```bash
 python -m torch.distributed.run --nproc_per_node=8 dp_fine_tune.py \
-    --data_dir /data/james/yelp_data \
-    --dataset_name yelp \
-    --output_dir /data/james/models \
-    --model_name gpt2-large \
-    --per_device_train_batch_size 4 \
-    --gradient_accumulation_steps 128 \
+    --data_dir dataset/big_patent \
+    --dataset_name big_patent \
+    --output_dir models \
+    --model_name distilgpt2 \
+    --per_device_train_batch_size 8 \
+    --gradient_accumulation_steps 64 \
     --evaluation_strategy epoch \
     --save_strategy epoch \
     --log_level info \
     --per_device_eval_batch_size 32 \
     --eval_accumulation_steps 1 \
     --seed 42 \
-    --target_epsilon 1.0 \
+    --target_epsilon 2.0 \
     --per_sample_max_grad_norm 1.0 \
     --weight_decay 0.01 \
     --remove_unused_columns False \
-    --num_train_epochs 10 \
+    --num_train_epochs 20 \
     --logging_steps 10 \
     --max_grad_norm 0. \
     --sequence_len 128 \
     --learning_rate 0.0001 \
     --lr_scheduler_type constant \
-    --dataloader_num_workers 100 \
+    --dataloader_num_workers 10 \
     --disable_tqdm False \
     --load_best_model_at_end True \
     --use_cc False \
@@ -60,35 +60,34 @@ Command for performing knowledge distillation:
 ```bash
 python -m torch.distributed.run --nproc_per_node=8 knowledge_distil.py \
     --dataset yelp \
-    --output_dir /data/james/models \
+    --output_dir models \
     --student_model distilgpt2 \
     --teacher_model gpt2-large \
-    --pytorch_checkpoint /data/james/models/gpt2-large-yelp-2.0-dp/pytorch_model.bin \
-    --synthetic_data_file /data/james/128_yelp_2.0_dp_synthetic_data.csv \
+    --pytorch_checkpoint models/gpt2-large-yelp-2.0-dp/pytorch_model.bin \
+    --synthetic_data_file dataset/128_yelp_2.0_dp_synthetic_data.csv \
     --sequence_len 128 \
-    --lambda_param 0.4 \
+    --lambda_param 0.0 \
     --temperature 1.0 \
-    --per_device_train_batch_size 64 \
+    --per_device_train_batch_size 16 \
     --gradient_accumulation_steps 1 \
     --evaluation_strategy epoch \
     --save_strategy epoch \
     --log_level info \
-    --per_device_eval_batch_size 64 \
+    --per_device_eval_batch_size 16 \
     --eval_accumulation_steps 1 \
     --seed 42 \
     --target_epsilon 2.0 \
     --per_sample_max_grad_norm 1.0 \
     --weight_decay 0.01 \
     --remove_unused_columns False \
-    --num_train_epochs 10 \
+    --num_train_epochs 3 \
     --logging_steps 50 \
     --max_grad_norm 0.0 \
     --lr_scheduler_type constant \
-    --learning_rate 1e-4 \
+    --learning_rate 2e-5 \
     --dataloader_num_workers 8 \
     --disable_tqdm False \
     --load_best_model_at_end True \
-    --use_cache True \
     --cache_dir /data/james/.cache
 ```
 
@@ -132,16 +131,15 @@ Command for running performance results
 
 ```bash
 python results.py \
-    --input_test_file /data/james/yelp_data \
+    --input_test_file dataset \
     --output_dir models \
     --teacher_model_type gpt2-large \
     --student_model_type distilgpt2 \
-    --syn_data_teacher_file /data/james/models/gpt2-large-yelp-4.0-dp \
-    --syn_data_student_file /data/james/models/distilgpt2-yelp-2.0-DPKD-syn-data \
-    --dpkd_teacher_file /data/james/models/gpt2-large-yelp-4.0-dp \
-    --dpkd_student_file /data/james/models/distilgpt2-yelp-2.0-DPKD \
-    --dpsgd_student_file /data/james/models/distilgpt2-yelp-2.0-dp \
-    --use_cache True \
+    --syn_data_teacher_file models/gpt2-large-yelp-2.0-dp \
+    --syn_data_student_file models/best-distilgpt2-yelp-2.0-DPKD-syn-data \
+    --dpkd_teacher_file models/gpt2-large-yelp-2.0-dp \
+    --dpkd_student_file models/distilgpt2-yelp-2.0-DPKD \
+    --dpsgd_student_file models/distilgpt2-yelp-2.0-dp \
     --cache_dir /data/james/.cache \
     --device cuda:0 \
     --sequence_len 128 \

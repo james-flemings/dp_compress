@@ -3,18 +3,12 @@ import csv
 import os
 from tqdm import tqdm
 
-'''
-train_ratio_gen = 75000 / 1207222 
-val_ratio_gen = 4400 / 67068 
-test_ratio_gen = 4400 / 2500
-'''
-
-train_ratio_gen = 100 / 1207222 
-val_ratio_gen = 20 / 2500
-test_ratio_gen = 20 / 2500
+train_ratio_gen = 150000 / 1207222 
+val_ratio_gen = 5000 / 67068 
+test_ratio_gen = 5000 / 67072
 
 cache_dir = "/data/james/.cache"
-output_dir = "."
+output_dir = "dataset/big_patent"
 
 cpc_codes = {'a': "Human Necessities",
              'b': "Performing Operations; Transporting",
@@ -51,7 +45,8 @@ for code, name in tqdm(cpc_codes.items(), desc="Processing through all code type
 
     train_ds, val_ds, test_ds = load_dataset("big_patent", code,
                                               split=[train_split, val_split, test_split],
-                                              cache_dir=cache_dir)
+                                              #cache_dir=cache_dir
+                                              )
     for train in train_ds:
         total_train_ds.append([train['abstract'], name]) 
     for val in val_ds:
@@ -60,9 +55,23 @@ for code, name in tqdm(cpc_codes.items(), desc="Processing through all code type
         total_test_ds.append([test['abstract'], name]) 
 
 train_path = os.path.join(output_dir, "train.csv") 
+val_path = os.path.join(output_dir, "val.csv") 
+test_path = os.path.join(output_dir, "test.csv") 
 
 with open(train_path, 'w') as f:
     csv_writer = csv.writer(f)
     csv_writer.writerow(title)
-    for train in total_test_ds:
+    for train in total_train_ds:
         csv_writer.writerow(train)
+
+with open(val_path, 'w') as f:
+    csv_writer = csv.writer(f)
+    csv_writer.writerow(title)
+    for val in total_val_ds:
+        csv_writer.writerow(val)
+
+with open(test_path, 'w') as f:
+    csv_writer = csv.writer(f)
+    csv_writer.writerow(title)
+    for test in total_test_ds:
+        csv_writer.writerow(test)
