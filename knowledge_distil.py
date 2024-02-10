@@ -81,22 +81,25 @@ class DistilTrainer(transformers.Trainer):
         '''
         student_output = self.student(**inputs, output_hidden_states=True)
 
-        with torch.no_grad():
-          teacher_output = self.teacher(**inputs, output_hidden_states=True)
 
         # Compute soft targets for teacher and student
-        soft_teacher = F.softmax(teacher_output.logits / self.temperature, dim=-1)
         soft_student = F.log_softmax(student_output.logits / self.temperature, dim=-1)
 
+        loss = 0
         # Compute the loss
-        distillation_loss = self.loss_function(soft_student[:, 5:], soft_teacher[:, 5:]) * (self.temperature ** 2)
+        if self.lambda_param > 0:
+            with torch.no_grad():
+                teacher_output = self.teacher(**inputs, output_hidden_states=True)
+            soft_teacher = F.softmax(teacher_output.logits / self.temperature, dim=-1)
+            distillation_loss = self.loss_function(soft_student[:, 5:], soft_teacher[:, 5:]) * (self.temperature ** 2)
+            loss += self.lambda_param * distillation_loss
 
         # Compute the true label loss
         student_target_loss = student_output.loss
 
         # Calculate final loss
-        loss = (1-self.lambda_param) * student_target_loss  \
-            + self.lambda_param * distillation_loss 
+        loss += (1-self.lambda_param) * student_target_loss  
+
         return (loss, student_output) if return_outputs else loss
 
 def main(args: Arguments):
@@ -181,12 +184,11 @@ def main(args: Arguments):
     if args.model.use_cache:
         dataset = datasets.load_dataset('csv', data_files={'train': args.model.synthetic_data_file}, cache_dir=args.model.cache_dir)
     else:
-        #dataset = datasets.load_dataset('csv', data_files={'train': args.model.synthetic_data_file}, split='train[:100000]')
-        dataset = datasets.load_dataset('csv', data_files={'train': args.model.synthetic_data_file, 
-                                                           'test': 'dataset/val.csv'},)
+        dataset = datasets.load_dataset('csv', data_files={'train': args.model.synthetic_data_file})
+        #dataset = datasets.load_dataset('csv', data_files={'train': args.model.synthetic_data_file, 
+        #                                                   'test': 'dataset/val.csv'},)
 
-    #dataset = dataset['train'].train_test_split(test_size=0.01)
-    #dataset = dataset.train_test_split(test_size=0.01)
+    dataset = dataset['train'].train_test_split(test_size=0.01)
     label_column_names = [name for name in dataset["train"].column_names if "label" in name]
 
     # Tokenize data
@@ -216,19 +218,35 @@ def main(args: Arguments):
     #train_args.label_names = ['input_ids']
     output_name = f'{args.model.student_model}-{args.model.dataset}-{privacy_args.target_epsilon}-DPKD-syn-data'
     train_args.output_dir = os.path.join(train_args.output_dir, output_name)
-    trainer = DistilTrainer(
-        student_model=student_model,
-        teacher_model=teacher_model,
+    if args.model.lambda_param > 0:
+        trainer = DistilTrainer(
+            student_model=student_model,
+            teacher_model=teacher_model,
+            args=train_args,
+            train_dataset=dataset["train"],
+            eval_dataset=dataset['test'],
+            data_collator=transformers.DefaultDataCollator(tokenizer),
+            tokenizer=tokenizer,
+            temperature=args.model.temperature,
+            lambda_param=args.model.lambda_param,
+        )
+    else:
+        train_args.label_names = ['labels']
+        trainer = transformers.Trainer(
         args=train_args,
-        train_dataset=dataset["train"],
+        model=student_model,
+        train_dataset=dataset['train'],
         eval_dataset=dataset['test'],
-        data_collator=transformers.DefaultDataCollator(),
-        tokenizer=tokenizer,
-        temperature=args.model.temperature,
-        lambda_param=args.model.lambda_param,
+        data_collator=dp_transformers.DataCollatorForPrivateCausalLanguageModeling(tokenizer),
+        tokenizer=tokenizer
     )
-    trainer.train()
-    trainer.save_model()
+
+    train_result = trainer.train()
+    if train_args.local_rank == 0 or train_args.local_rank == -1:
+        metrics = train_result.metrics
+        trainer.save_model()
+        trainer.log_metrics("train", metrics)
+        trainer.save_metrics("train", metrics)        
 
 if __name__ == "__main__":
     arg_parser = transformers.HfArgumentParser((dp_transformers.TrainingArguments, dp_transformers.PrivacyArguments, ModelArguments))

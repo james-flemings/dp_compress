@@ -44,13 +44,13 @@ Command for generating synthetic data:
 ```bash
 python generate_text.py \
     --model_type gpt2-large \
-    --pytorch_checkpoint models/gpt2-large-yelp-2.0-dp/pytorch_model.bin \
-    --input_training_file dataset/train.csv \
+    --pytorch_checkpoint models/cc-gpt2-large-big_patent-2.0-dp/pytorch_model.bin \
+    --input_training_file dataset/big_patent/train.csv \
     --output_dir dataset \
     --cache_dir /data/james/.cache \
-    --dataset yelp \
+    --dataset big_patent \
     --seq_len 128 \
-    --total_sequences 400000 \
+    --total_sequences 200000 \
     --do_sample \
     --epsilon 2.0 \
     --device cuda:0 
@@ -80,11 +80,12 @@ python -m torch.distributed.run --nproc_per_node=8 knowledge_distil.py \
     --per_sample_max_grad_norm 1.0 \
     --weight_decay 0.01 \
     --remove_unused_columns False \
-    --num_train_epochs 3 \
+    --num_train_epochs 5 \
     --logging_steps 50 \
     --max_grad_norm 0.0 \
+    --warmup_step=25 \
     --lr_scheduler_type constant \
-    --learning_rate 2e-5 \
+    --learning_rate 1e-6 \
     --dataloader_num_workers 8 \
     --disable_tqdm False \
     --load_best_model_at_end True \
@@ -136,12 +137,12 @@ python results.py \
     --teacher_model_type gpt2-large \
     --student_model_type distilgpt2 \
     --syn_data_teacher_file models/gpt2-large-yelp-2.0-dp \
-    --syn_data_student_file models/best-distilgpt2-yelp-2.0-DPKD-syn-data \
+    --syn_data_student_file models/distilgpt2-yelp-2.0-DPKD-syn-data \
     --dpkd_teacher_file models/gpt2-large-yelp-2.0-dp \
     --dpkd_student_file models/distilgpt2-yelp-2.0-DPKD \
     --dpsgd_student_file models/distilgpt2-yelp-2.0-dp \
     --cache_dir /data/james/.cache \
-    --device cuda:0 \
+    --device cuda:7 \
     --sequence_len 128 \
     --target_epsilon 2.0
 ```
