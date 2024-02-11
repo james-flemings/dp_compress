@@ -11,15 +11,18 @@ def main(args):
         teacher_model_dpkd = transformers.GPT2LMHeadModel.from_pretrained(args.teacher_model_type, cache_dir=args.cache_dir)
         student_model_dpkd = transformers.GPT2LMHeadModel.from_pretrained(args.student_model_type, cache_dir=args.cache_dir)
         student_model_dpsgd = transformers.GPT2LMHeadModel.from_pretrained(args.student_model_type, cache_dir=args.cache_dir)
+        teacher_model_syn = transformers.GPT2LMHeadModel.from_pretrained(args.teacher_model_type, cache_dir=args.cache_dir)
         teacher_pre_trained_model = transformers.GPT2LMHeadModel.from_pretrained(args.teacher_model_type, cache_dir=args.cache_dir) 
         student_pre_trained_model = transformers.GPT2LMHeadModel.from_pretrained(args.student_model_type, cache_dir=args.cache_dir) 
     else:
         teacher_model_dpkd = transformers.GPT2LMHeadModel.from_pretrained(args.teacher_model_type)
         student_model_dpkd = transformers.GPT2LMHeadModel.from_pretrained(args.student_model_type)
+        teacher_model_syn = transformers.GPT2LMHeadModel.from_pretrained(args.teacher_model_type)
         student_model_dpsgd = transformers.GPT2LMHeadModel.from_pretrained(args.student_model_type)
         teacher_pre_trained_model = transformers.GPT2LMHeadModel.from_pretrained(args.teacher_model_type) 
         student_pre_trained_model = transformers.GPT2LMHeadModel.from_pretrained(args.student_model_type) 
     student_model_syn = transformers.GPT2LMHeadModel.from_pretrained(args.syn_data_student_file, local_files_only=True)
+    student_model_dpkd_syn = transformers.GPT2LMHeadModel.from_pretrained(args.dpkd_syn_data_student_file, local_files_only=True)
         
     # Load tokenizer
     if args.use_cache:
@@ -38,15 +41,19 @@ def main(args):
         teacher_pre_trained_model.transformer.wte.weight.data[-(i + 1), :] = teacher_mean_tok_emb
         #student_pre_trained_model.transformer.wte.weight.data[-(i + 1), :] = student_mean_tok_emb
         teacher_model_dpkd.transformer.wte.weight.data[-(i + 1), :] = teacher_mean_tok_emb
+        teacher_model_syn.transformer.wte.weight.data[-(i + 1), :] = teacher_mean_tok_emb
         student_model_dpkd.transformer.wte.weight.data[-(i + 1), :] = student_mean_tok_emb
         student_model_syn.transformer.wte.weight.data[-(i + 1), :] = student_mean_tok_emb
+        student_model_dpkd_syn.transformer.wte.weight.data[-(i + 1), :] = student_mean_tok_emb
         student_model_dpsgd.transformer.wte.weight.data[-(i + 1), :] = student_mean_tok_emb
 
     teacher_model_dpkd.resize_token_embeddings(len(teacher_tokenizer))
     student_model_dpkd.resize_token_embeddings(len(student_tokenizer))
     teacher_pre_trained_model.resize_token_embeddings(len(teacher_tokenizer))
+    teacher_model_syn.resize_token_embeddings(len(teacher_tokenizer))
     #student_pre_trained_model.resize_token_embeddings(len(student_tokenizer))
     student_model_syn.resize_token_embeddings(len(teacher_tokenizer))
+    student_model_dpkd_syn.resize_token_embeddings(len(teacher_tokenizer))
     student_model_dpsgd.resize_token_embeddings(len(student_tokenizer))
 
     # Load dp weights for teacher dpkd
@@ -56,6 +63,14 @@ def main(args):
         key = key.replace("_module.module.", "")
         state_dict[key] = value
     teacher_model_dpkd.load_state_dict(state_dict)
+
+    # Load dp weights for teacher with control code 
+    sd = torch.load(os.path.join(args.syn_data_teacher_file, "pytorch_model.bin"), map_location="cpu")
+    state_dict = {}
+    for key, value in sd.items():
+        key = key.replace("_module.module.", "")
+        state_dict[key] = value
+    teacher_model_syn.load_state_dict(state_dict)
 
     # Load dp weights for student dpkd
     sd = torch.load(os.path.join(args.dpkd_student_file, "pytorch_model.bin"), map_location="cpu")
@@ -76,6 +91,8 @@ def main(args):
     teacher_model_dpkd = teacher_model_dpkd.to(args.device)
     student_model_dpkd = student_model_dpkd.to(args.device)
     student_model_syn = student_model_syn.to(args.device)
+    student_model_dpkd_syn = student_model_dpkd_syn.to(args.device)
+    teacher_model_syn = teacher_model_syn.to(args.device)
     student_model_dpsgd = student_model_dpsgd.to(args.device)
     teacher_pre_trained_model = teacher_pre_trained_model.to(args.device)
     student_pre_trained_model = student_pre_trained_model.to(args.device)
@@ -128,9 +145,14 @@ def main(args):
     '''
 
     nlls_pre_trained = []
+    nlls_pre_trained_teacher = []
     nlls_dpsgd = []
     nlls_dpkd = []
+    nlls_dpkd_teacher = []
     nlls_dp_syn_data = []
+    nlls_dpkd_syn_data = []
+    nlls_syn_teacher = []
+
     student_dataset = student_tokenizer("\n\n".join(dataset['test']['text']), return_tensors="pt")
     teacher_dataset = teacher_tokenizer("\n\n".join(dataset['test']['text']), return_tensors="pt")
     # we set the max length equal to the sequence length that the models were trained on
@@ -150,14 +172,24 @@ def main(args):
 
         with torch.no_grad():
             output_pre = student_pre_trained_model(student_input_ids, labels=student_target_ids)
+            output_dpkd_syn_data = student_model_dpkd_syn(teacher_input_ids, labels=teacher_target_ids)
             output_dpsgd = student_model_dpsgd(student_input_ids, labels=student_target_ids)
             output_dpkd = student_model_dpkd(teacher_input_ids, labels=teacher_target_ids)
             output_dp_syn_data = student_model_syn(teacher_input_ids, labels=teacher_target_ids)
+
+            output_pre_teacher = teacher_pre_trained_model(teacher_input_ids, labels=teacher_target_ids)
+            output_dpkd_teacher = teacher_model_dpkd(teacher_input_ids, labels=teacher_target_ids)
+            output_syn_teacher = teacher_model_syn(teacher_input_ids, labels=teacher_target_ids)
 
         nlls_pre_trained.append(output_pre.loss)
         nlls_dpsgd.append(output_dpsgd.loss)
         nlls_dpkd.append(output_dpkd.loss)
         nlls_dp_syn_data.append(output_dp_syn_data.loss)
+        nlls_dpkd_syn_data.append(output_dpkd_syn_data.loss)
+
+        nlls_pre_trained_teacher.append(output_pre_teacher.loss)
+        nlls_dpkd_teacher.append(output_dpkd_teacher.loss)
+        nlls_syn_teacher.append(output_syn_teacher.loss)
 
         prev_end_loc = end_loc
         if end_loc == seq_len:
@@ -167,15 +199,28 @@ def main(args):
     ppl_dpsgd = torch.exp(torch.stack(nlls_dpsgd).mean())
     ppl_dpkd = torch.exp(torch.stack(nlls_dpkd).mean())
     ppl_dp_syn_data = torch.exp(torch.stack(nlls_dp_syn_data).mean())
+    ppl_dpkd_syn_data = torch.exp(torch.stack(nlls_dpkd_syn_data).mean())
+
+    ppl_pre_trained_teacher = torch.exp(torch.stack(nlls_pre_trained_teacher).mean())
+    ppl_dpkd_teacher = torch.exp(torch.stack(nlls_dpkd_teacher).mean())
+    ppl_syn_teacher = torch.exp(torch.stack(nlls_syn_teacher).mean())
 
     print(f"Test set perplexity of Student model with DPKD ε = {args.target_epsilon} \
            {ppl_dpkd:.2f}")
-    print(f"Test set perplexity of Student model trained with synthetic data \
+    print(f"Test set perplexity of Student model trained with DP synthetic data and KD ε = {args.target_epsilon} \
+          {ppl_dpkd_syn_data:.2f}")
+    print(f"Test set perplexity of Student model trained with just DP synthetic data ε = {args.target_epsilon} \
           {ppl_dp_syn_data:.2f}")
     print(f"Test set perplexity of Student model trained with just DP-SGD ε = {args.target_epsilon} \
           {ppl_dpsgd:.2f}")
     print(f"Test set perplexity of pre-trained Student model \
           {ppl_pre_trained:.2f}")
+    print(f"Test set perplexity of Teacher model with DPKD ε = {args.target_epsilon/2} \
+          {ppl_dpkd_teacher:.2f}")
+    print(f"Test set perplexity of Teacher model trained with control code ε = {args.target_epsilon} \
+          {ppl_syn_teacher:.2f}")
+    print(f"Test set perplexity of pre-trained Teacher model \
+          {ppl_pre_trained_teacher:.2f}")
 
 
 if __name__ == "__main__":
@@ -224,6 +269,12 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--syn_data_student_file",
+        type=str,
+        default=None,
+        required=True
+    )
+    parser.add_argument(
+        "--dpkd_syn_data_student_file",
         type=str,
         default=None,
         required=True

@@ -225,7 +225,7 @@ def main(args: Arguments):
             args=train_args,
             train_dataset=dataset["train"],
             eval_dataset=dataset['test'],
-            data_collator=transformers.DefaultDataCollator(tokenizer),
+            data_collator=transformers.DefaultDataCollator(),
             tokenizer=tokenizer,
             temperature=args.model.temperature,
             lambda_param=args.model.lambda_param,
@@ -237,7 +237,7 @@ def main(args: Arguments):
         model=student_model,
         train_dataset=dataset['train'],
         eval_dataset=dataset['test'],
-        data_collator=dp_transformers.DataCollatorForPrivateCausalLanguageModeling(tokenizer),
+        data_collator=transformers.DefaultDataCollator(),
         tokenizer=tokenizer
     )
 
