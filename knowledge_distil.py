@@ -80,7 +80,8 @@ class DistilTrainer(transformers.Trainer):
         self.temperature = temperature
         self.lambda_param = lambda_param
         self.alpha_cos = alpha_cos
-        self.cosine_loss_fct = nn.CosineEmbeddingLoss(reduction="mean")
+        #self.hidden_loss_fct = nn.CosineEmbeddingLoss(reduction="mean")
+        self.hidden_loss_fct = nn.MSELoss(reduction="mean")
 
     def compute_loss(self, model, inputs, return_outputs=False):
         '''
@@ -108,19 +109,13 @@ class DistilTrainer(transformers.Trainer):
             mask = (attention_mask.unsqueeze(-1).expand_as(s_hidden_states) > 0)
             assert s_hidden_states.size() == t_hidden_states.size()
             dim = s_hidden_states.size(-1) 
-            '''
-            s_hidden_states_slct = torch.masked_select(s_hidden_states, mask)  # (bs * seq_length * dim)
-            s_hidden_states_slct = s_hidden_states_slct.view(-1, dim)  # (bs * seq_length, dim)
-            t_hidden_states_slct = torch.masked_select(t_hidden_states, mask)  # (bs * seq_length * dim)
-            t_hidden_states_slct = t_hidden_states_slct.view(-1, dim)  # (bs * seq_length, dim)
-            '''
+
             s_hidden_states_slct = s_hidden_states.view(-1, dim)
             t_hidden_states_slct = t_hidden_states.view(-1, dim)
 
-            #target = s_hidden_states_slct.new(s_hidden_states_slct.size(0)).fill_(1)  # (bs * seq_length,)
             target = torch.ones(s_hidden_states_slct.size(0)).to(s_hidden_states_slct.device)
-            loss_cos = self.cosine_loss_fct(s_hidden_states_slct, t_hidden_states_slct, target)
-            loss += self.alpha_cos * loss_cos
+            loss_hid = self.hidden_loss_fct(s_hidden_states_slct, t_hidden_states_slct)
+            loss += self.alpha_cos * loss_hid
 
         # Compute the true label loss
         student_target_loss = student_output.loss
@@ -213,8 +208,6 @@ def main(args: Arguments):
         dataset = datasets.load_dataset('csv', data_files={'train': args.model.synthetic_data_file}, cache_dir=args.model.cache_dir)
     else:
         dataset = datasets.load_dataset('csv', data_files={'train': args.model.synthetic_data_file})
-        #dataset = datasets.load_dataset('csv', data_files={'train': args.model.synthetic_data_file, 
-        #                                                   'test': 'dataset/val.csv'},)
 
     dataset = dataset['train'].train_test_split(test_size=0.01)
     label_column_names = [name for name in dataset["train"].column_names if "label" in name]
@@ -269,7 +262,6 @@ def main(args: Arguments):
         data_collator=transformers.DefaultDataCollator(),
         tokenizer=tokenizer
     )
-
     train_result = trainer.train()
     if train_args.local_rank == 0 or train_args.local_rank == -1:
         metrics = train_result.metrics

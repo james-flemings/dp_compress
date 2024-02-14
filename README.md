@@ -64,10 +64,10 @@ python -m torch.distributed.run --nproc_per_node=8 knowledge_distil.py \
     --student_model distilgpt2 \
     --teacher_model gpt2 \
     --pytorch_checkpoint /data/james/models/cc-gpt2-big_patent-2.0-dp/pytorch_model.bin \
-    --synthetic_data_file 128_big_patent_2.0_dp_synthetic_data.csv \
+    --synthetic_data_file dataset/128_big_patent_2.0_dp_synthetic_data.csv \
     --sequence_len 128 \
     --lambda_param 0.4 \
-    --alpha_cos 5.0 \
+    --alpha_cos 0 \
     --temperature 1.0 \
     --per_device_train_batch_size 64 \
     --gradient_accumulation_steps 1 \
@@ -81,7 +81,7 @@ python -m torch.distributed.run --nproc_per_node=8 knowledge_distil.py \
     --per_sample_max_grad_norm 1.0 \
     --weight_decay 0.01 \
     --remove_unused_columns False \
-    --num_train_epochs 10 \
+    --num_train_epochs 12 \
     --logging_steps 50 \
     --max_grad_norm 0.0 \
     --warmup_step 0 \
