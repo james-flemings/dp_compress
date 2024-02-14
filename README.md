@@ -10,12 +10,12 @@ git submodule update
 Command to run for fine-tuning:
 ```bash
 python -m torch.distributed.run --nproc_per_node=8 dp_fine_tune.py \
-    --data_dir dataset/big_patent \
+    --data_dir /data/james/big_patent \
     --dataset_name big_patent \
-    --output_dir models \
-    --model_name distilgpt2 \
-    --per_device_train_batch_size 8 \
-    --gradient_accumulation_steps 64 \
+    --output_dir /data/james/models \
+    --model_name gpt2 \
+    --per_device_train_batch_size 32 \
+    --gradient_accumulation_steps 16 \
     --evaluation_strategy epoch \
     --save_strategy epoch \
     --log_level info \
@@ -26,7 +26,7 @@ python -m torch.distributed.run --nproc_per_node=8 dp_fine_tune.py \
     --per_sample_max_grad_norm 1.0 \
     --weight_decay 0.01 \
     --remove_unused_columns False \
-    --num_train_epochs 20 \
+    --num_train_epochs 30 \
     --logging_steps 10 \
     --max_grad_norm 0. \
     --sequence_len 128 \
@@ -35,18 +35,18 @@ python -m torch.distributed.run --nproc_per_node=8 dp_fine_tune.py \
     --dataloader_num_workers 10 \
     --disable_tqdm False \
     --load_best_model_at_end True \
-    --use_cc False \
-    --use_cache False \
+    --use_cache True \
     --cache_dir /data/james/.cache
 ```
 
 Command for generating synthetic data:
 ```bash
 python generate_text.py \
-    --model_type gpt2-large \
-    --pytorch_checkpoint models/cc-gpt2-large-big_patent-2.0-dp/pytorch_model.bin \
-    --input_training_file dataset/big_patent/train.csv \
-    --output_dir dataset \
+    --model_type gpt2 \
+    --pytorch_checkpoint /data/james/models/cc-gpt2-big_patent-2.0-dp/pytorch_model.bin \
+    --input_training_file /data/james/big_patent/train.csv \
+    --output_dir . \
+    --use_cache True \
     --cache_dir /data/james/.cache \
     --dataset big_patent \
     --seq_len 128 \
@@ -60,15 +60,16 @@ Command for performing knowledge distillation:
 ```bash
 python -m torch.distributed.run --nproc_per_node=8 knowledge_distil.py \
     --dataset big_patent \
-    --output_dir models \
+    --output_dir /data/james/models \
     --student_model distilgpt2 \
-    --teacher_model gpt2-large \
-    --pytorch_checkpoint models/cc-gpt2-large-big_patent-2.0-dp/pytorch_model.bin \
-    --synthetic_data_file dataset/128_big_patent_2.0_dp_synthetic_data.csv \
+    --teacher_model gpt2 \
+    --pytorch_checkpoint /data/james/models/cc-gpt2-big_patent-2.0-dp/pytorch_model.bin \
+    --synthetic_data_file 128_big_patent_2.0_dp_synthetic_data.csv \
     --sequence_len 128 \
     --lambda_param 0.4 \
+    --alpha_cos 5.0 \
     --temperature 1.0 \
-    --per_device_train_batch_size 16 \
+    --per_device_train_batch_size 64 \
     --gradient_accumulation_steps 1 \
     --evaluation_strategy epoch \
     --save_strategy epoch \
@@ -80,27 +81,28 @@ python -m torch.distributed.run --nproc_per_node=8 knowledge_distil.py \
     --per_sample_max_grad_norm 1.0 \
     --weight_decay 0.01 \
     --remove_unused_columns False \
-    --num_train_epochs 12 \
+    --num_train_epochs 10 \
     --logging_steps 50 \
     --max_grad_norm 0.0 \
-    --warmup_step=25 \
+    --warmup_step 0 \
     --lr_scheduler_type constant \
     --learning_rate 8e-5 \
     --dataloader_num_workers 8 \
     --disable_tqdm False \
     --load_best_model_at_end True \
+    --use_cache True \
     --cache_dir /data/james/.cache
 ```
 
 Command for performing differentially private knowledge distillation:
 ```bash
 python -m torch.distributed.run --nproc_per_node=8 dp_kd.py \
-    --data_dir /data/james/yelp_data \
-    --dataset_name yelp \
+    --data_dir /data/james/big_patent \
+    --dataset_name big_patent \
     --output_dir /data/james/models \
     --student_model distilgpt2 \
     --teacher_model gpt2-large \
-    --pytorch_checkpoint /data/james/models/gpt2-large-yelp-2.0-dp/pytorch_model.bin \
+    --pytorch_checkpoint /data/james/models/gpt2-large-big_patent-1.0-dp/pytorch_model.bin \
     --sequence_len 128 \
     --lambda_param 0.4 \
     --temperature 1.0 \
@@ -116,7 +118,7 @@ python -m torch.distributed.run --nproc_per_node=8 dp_kd.py \
     --per_sample_max_grad_norm 1.0 \
     --weight_decay 0.01 \
     --remove_unused_columns False \
-    --num_train_epochs 25 \
+    --num_train_epochs 40 \
     --logging_steps 50 \
     --max_grad_norm 0.0 \
     --lr_scheduler_type constant \
@@ -132,16 +134,17 @@ Command for running performance results for yelp
 
 ```bash
 python results.py \
-    --input_test_file dataset \
-    --output_dir models \
+    --input_test_file /data/james/yelp_data \
+    --output_dir /data/james/models \
     --teacher_model_type gpt2-large \
     --student_model_type distilgpt2 \
-    --syn_data_teacher_file models/gpt2-large-yelp-2.0-dp \
-    --syn_data_student_file models/distilgpt2-yelp-2.0-DPKD-syn-data \
-    --dpkd_syn_data_student_file models/best-distilgpt2-yelp-2.0-DPKD-syn-data \
-    --dpkd_teacher_file models/gpt2-large-yelp-1.0-dp \
-    --dpkd_student_file models/distilgpt2-yelp-2.0-DPKD \
-    --dpsgd_student_file models/distilgpt2-yelp-2.0-dp \
+    --syn_data_teacher_file /data/james/models/gpt2-large-yelp-2.0-dp \
+    --syn_data_student_file /data/james/models/distilgpt2-yelp-2.0-DPKD-syn-data \
+    --dpkd_syn_data_student_file /data/james/models/best-distilgpt2-yelp-2.0-dp-syn-data \
+    --dpkd_teacher_file /data/james/models/gpt2-large-yelp-1.0-dp \
+    --dpkd_student_file /data/james/models/distilgpt2-yelp-2.0-DPKD \
+    --dpsgd_student_file /data/james/models/distilgpt2-yelp-2.0-dp \
+    --use_cache True \
     --cache_dir /data/james/.cache \
     --device cuda:0 \
     --sequence_len 128 \
@@ -152,16 +155,17 @@ Command for running performance results for big patent
 
 ```bash
 python results.py \
-    --input_test_file dataset \
-    --output_dir models \
-    --teacher_model_type gpt2-large \
+    --input_test_file /data/james/big_patent \
+    --output_dir /data/james/models \
+    --teacher_model_type gpt2 \
     --student_model_type distilgpt2 \
-    --syn_data_teacher_file models/gpt2-large-yelp-2.0-dp \
-    --syn_data_student_file models/distilgpt2-yelp-2.0-DPKD-syn-data \
-    --dpkd_syn_data_student_file models/best-distilgpt2-yelp-2.0-DPKD-syn-data \
-    --dpkd_teacher_file models/gpt2-large-yelp-1.0-dp \
-    --dpkd_student_file models/distilgpt2-yelp-2.0-DPKD \
-    --dpsgd_student_file models/distilgpt2-yelp-2.0-dp \
+    --syn_data_teacher_file /data/james/models/cc-gpt2-big_patent-2.0-dp \
+    --syn_data_student_file /data/james/models/distilgpt2-big_patent-2.0-dp-syn-data \
+    --dpkd_syn_data_student_file /data/james/models/distilgpt2-big_patent-2.0-DPKD-syn-data \
+    --dpkd_teacher_file /data/james/models/gpt2-big_patent-2.0-dp \
+    --dpkd_student_file /data/james/models/distilgpt2-big_patent-2.0-DPKD \
+    --dpsgd_student_file /data/james/models/distilgpt2-big_patent-2.0-dp \
+    --use_cache True \
     --cache_dir /data/james/.cache \
     --device cuda:0 \
     --sequence_len 128 \

@@ -45,6 +45,10 @@ class ModelArguments:
         "help": "Weight parameter for Student Teacher loss"
     })
 
+    alpha_cos: float = field(default=0.0, metadata={
+        "help": "Weight parameter for Cosine loss"
+    })
+
     temperature: float = field(default=1.0, metadata={
         "help": "Temperature parameter"
     })
@@ -67,6 +71,7 @@ class DistilTrainer(transformers.Trainer):
                  student_model=None,
                  temperature=0, 
                  lambda_param=0,
+                 alpha_cos=0,
                  *args, **kwargs):
         super().__init__(model=student_model, *args, **kwargs)
         self.teacher = teacher_model
@@ -74,6 +79,8 @@ class DistilTrainer(transformers.Trainer):
         self.loss_function = nn.KLDivLoss(reduction='batchmean') 
         self.temperature = temperature
         self.lambda_param = lambda_param
+        self.alpha_cos = alpha_cos
+        self.cosine_loss_fct = nn.CosineEmbeddingLoss(reduction="mean")
 
     def compute_loss(self, model, inputs, return_outputs=False):
         '''
@@ -86,13 +93,34 @@ class DistilTrainer(transformers.Trainer):
         soft_student = F.log_softmax(student_output.logits / self.temperature, dim=-1)
 
         loss = 0
+        with torch.no_grad():
+            teacher_output = self.teacher(**inputs, output_hidden_states=True)
         # Compute the loss
         if self.lambda_param > 0:
-            with torch.no_grad():
-                teacher_output = self.teacher(**inputs, output_hidden_states=True)
             soft_teacher = F.softmax(teacher_output.logits / self.temperature, dim=-1)
             distillation_loss = self.loss_function(soft_student[:, 5:], soft_teacher[:, 5:]) * (self.temperature ** 2)
             loss += self.lambda_param * distillation_loss
+
+        if self.alpha_cos > 0:
+            s_hidden_states = student_output['hidden_states'][-1]
+            t_hidden_states = teacher_output['hidden_states'][-1]
+            attention_mask = inputs['attention_mask']
+            mask = (attention_mask.unsqueeze(-1).expand_as(s_hidden_states) > 0)
+            assert s_hidden_states.size() == t_hidden_states.size()
+            dim = s_hidden_states.size(-1) 
+            '''
+            s_hidden_states_slct = torch.masked_select(s_hidden_states, mask)  # (bs * seq_length * dim)
+            s_hidden_states_slct = s_hidden_states_slct.view(-1, dim)  # (bs * seq_length, dim)
+            t_hidden_states_slct = torch.masked_select(t_hidden_states, mask)  # (bs * seq_length * dim)
+            t_hidden_states_slct = t_hidden_states_slct.view(-1, dim)  # (bs * seq_length, dim)
+            '''
+            s_hidden_states_slct = s_hidden_states.view(-1, dim)
+            t_hidden_states_slct = t_hidden_states.view(-1, dim)
+
+            #target = s_hidden_states_slct.new(s_hidden_states_slct.size(0)).fill_(1)  # (bs * seq_length,)
+            target = torch.ones(s_hidden_states_slct.size(0)).to(s_hidden_states_slct.device)
+            loss_cos = self.cosine_loss_fct(s_hidden_states_slct, t_hidden_states_slct, target)
+            loss += self.alpha_cos * loss_cos
 
         # Compute the true label loss
         student_target_loss = student_output.loss
@@ -229,6 +257,7 @@ def main(args: Arguments):
             tokenizer=tokenizer,
             temperature=args.model.temperature,
             lambda_param=args.model.lambda_param,
+            alpha_cos=args.model.alpha_cos
         )
     else:
         train_args.label_names = ['labels']

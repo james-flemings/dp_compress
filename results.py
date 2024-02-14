@@ -38,7 +38,7 @@ def main(args):
     student_mean_tok_emb = student_pre_trained_model.transformer.wte.weight.data.mean(dim=0)
     # Initialize the newly-added token embedding to the mean of all token embeddings
     for i in range(num_added_toks):
-        teacher_pre_trained_model.transformer.wte.weight.data[-(i + 1), :] = teacher_mean_tok_emb
+        #teacher_pre_trained_model.transformer.wte.weight.data[-(i + 1), :] = teacher_mean_tok_emb
         #student_pre_trained_model.transformer.wte.weight.data[-(i + 1), :] = student_mean_tok_emb
         teacher_model_dpkd.transformer.wte.weight.data[-(i + 1), :] = teacher_mean_tok_emb
         teacher_model_syn.transformer.wte.weight.data[-(i + 1), :] = teacher_mean_tok_emb
@@ -49,7 +49,7 @@ def main(args):
 
     teacher_model_dpkd.resize_token_embeddings(len(teacher_tokenizer))
     student_model_dpkd.resize_token_embeddings(len(student_tokenizer))
-    teacher_pre_trained_model.resize_token_embeddings(len(teacher_tokenizer))
+    #teacher_pre_trained_model.resize_token_embeddings(len(teacher_tokenizer))
     teacher_model_syn.resize_token_embeddings(len(teacher_tokenizer))
     #student_pre_trained_model.resize_token_embeddings(len(student_tokenizer))
     student_model_syn.resize_token_embeddings(len(teacher_tokenizer))
