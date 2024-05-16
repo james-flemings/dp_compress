@@ -10,10 +10,10 @@ git submodule update
 Command to run for fine-tuning:
 ```bash
 python -m torch.distributed.run --nproc_per_node=8 dp_fine_tune.py \
-    --data_dir /data/james/big_patent \
-    --dataset_name big_patent \
+    --data_dir /data/james/reddit_data \
+    --dataset_name reddit \
     --output_dir /data/james/models \
-    --model_name gpt2 \
+    --model_name distilgpt2 \
     --per_device_train_batch_size 32 \
     --gradient_accumulation_steps 16 \
     --evaluation_strategy epoch \
@@ -27,7 +27,7 @@ python -m torch.distributed.run --nproc_per_node=8 dp_fine_tune.py \
     --weight_decay 0.01 \
     --remove_unused_columns False \
     --num_train_epochs 30 \
-    --logging_steps 10 \
+    --logging_steps 5 \
     --max_grad_norm 0. \
     --sequence_len 128 \
     --learning_rate 0.0001 \
@@ -42,29 +42,30 @@ python -m torch.distributed.run --nproc_per_node=8 dp_fine_tune.py \
 Command for generating synthetic data:
 ```bash
 python generate_text.py \
-    --model_type gpt2 \
-    --pytorch_checkpoint /data/james/models/cc-gpt2-big_patent-2.0-dp/pytorch_model.bin \
-    --input_training_file /data/james/big_patent/train.csv \
-    --output_dir . \
+    --model_type gpt2-large \
+    --pytorch_checkpoint /data/james/models/cc-gpt2-large-reddit-2.0-dp/pytorch_model.bin \
+    --input_training_file /data/james/reddit_data/train.csv \
+    --output_dir /data/james/synthetic_data \
     --use_cache True \
     --cache_dir /data/james/.cache \
-    --dataset big_patent \
+    --dataset reddit \
     --seq_len 128 \
-    --total_sequences 200000 \
+    --batch_size 64 \
+    --total_sequences 600000 \
     --do_sample \
     --epsilon 2.0 \
-    --device cuda:0 
+    --device cuda:7 
 ```
 
 Command for performing knowledge distillation:
 ```bash
 python -m torch.distributed.run --nproc_per_node=8 knowledge_distil.py \
-    --dataset big_patent \
+    --dataset reddit \
     --output_dir /data/james/models \
     --student_model distilgpt2 \
-    --teacher_model gpt2 \
-    --pytorch_checkpoint /data/james/models/cc-gpt2-big_patent-2.0-dp/pytorch_model.bin \
-    --synthetic_data_file dataset/128_big_patent_2.0_dp_synthetic_data.csv \
+    --teacher_model gpt2-large \
+    --pytorch_checkpoint /data/james/models/cc-gpt2-large-reddit-2.0-dp/pytorch_model.bin \
+    --synthetic_data_file /data/james/synthetic_data/128_reddit_2.0_dp_synthetic_data.csv \
     --sequence_len 128 \
     --lambda_param 0.4 \
     --alpha_cos 0 \
@@ -81,7 +82,7 @@ python -m torch.distributed.run --nproc_per_node=8 knowledge_distil.py \
     --per_sample_max_grad_norm 1.0 \
     --weight_decay 0.01 \
     --remove_unused_columns False \
-    --num_train_epochs 12 \
+    --num_train_epochs 14\
     --logging_steps 50 \
     --max_grad_norm 0.0 \
     --warmup_step 0 \
@@ -97,12 +98,12 @@ python -m torch.distributed.run --nproc_per_node=8 knowledge_distil.py \
 Command for performing differentially private knowledge distillation:
 ```bash
 python -m torch.distributed.run --nproc_per_node=8 dp_kd.py \
-    --data_dir /data/james/big_patent \
-    --dataset_name big_patent \
+    --data_dir /data/james/reddit_data \
+    --dataset_name reddit \
     --output_dir /data/james/models \
     --student_model distilgpt2 \
     --teacher_model gpt2-large \
-    --pytorch_checkpoint /data/james/models/gpt2-large-big_patent-1.0-dp/pytorch_model.bin \
+    --pytorch_checkpoint /data/james/models/gpt2-large-reddit-1.0-dp/pytorch_model.bin \
     --sequence_len 128 \
     --lambda_param 0.4 \
     --temperature 1.0 \
@@ -118,7 +119,7 @@ python -m torch.distributed.run --nproc_per_node=8 dp_kd.py \
     --per_sample_max_grad_norm 1.0 \
     --weight_decay 0.01 \
     --remove_unused_columns False \
-    --num_train_epochs 40 \
+    --num_train_epochs 30 \
     --logging_steps 50 \
     --max_grad_norm 0.0 \
     --lr_scheduler_type constant \
@@ -139,8 +140,8 @@ python results.py \
     --teacher_model_type gpt2-large \
     --student_model_type distilgpt2 \
     --syn_data_teacher_file /data/james/models/gpt2-large-yelp-2.0-dp \
-    --syn_data_student_file /data/james/models/distilgpt2-yelp-2.0-DPKD-syn-data \
-    --dpkd_syn_data_student_file /data/james/models/best-distilgpt2-yelp-2.0-dp-syn-data \
+    --syn_data_student_file /data/james/models/distilgpt2-yelp-2.0-dp-syn-data \
+    --dpkd_syn_data_student_file /data/james/models/best-distilgpt2-yelp-2.0-DPKD-syn-data \
     --dpkd_teacher_file /data/james/models/gpt2-large-yelp-1.0-dp \
     --dpkd_student_file /data/james/models/distilgpt2-yelp-2.0-DPKD \
     --dpsgd_student_file /data/james/models/distilgpt2-yelp-2.0-dp \
@@ -157,14 +158,54 @@ Command for running performance results for big patent
 python results.py \
     --input_test_file /data/james/big_patent \
     --output_dir /data/james/models \
-    --teacher_model_type gpt2 \
+    --teacher_model_type gpt2-large \
     --student_model_type distilgpt2 \
-    --syn_data_teacher_file /data/james/models/cc-gpt2-big_patent-2.0-dp \
+    --syn_data_teacher_file /data/james/models/cc-gpt2-large-big_patent-2.0-dp \
     --syn_data_student_file /data/james/models/distilgpt2-big_patent-2.0-dp-syn-data \
-    --dpkd_syn_data_student_file /data/james/models/distilgpt2-big_patent-2.0-DPKD-syn-data \
-    --dpkd_teacher_file /data/james/models/gpt2-big_patent-2.0-dp \
+    --dpkd_syn_data_student_file /data/james/models/best-distilgpt2-big_patent-2.0-DPKD-syn-data \
+    --dpkd_teacher_file /data/james/models/gpt2-large-big_patent-1.0-dp \
     --dpkd_student_file /data/james/models/distilgpt2-big_patent-2.0-DPKD \
     --dpsgd_student_file /data/james/models/distilgpt2-big_patent-2.0-dp \
+    --use_cache True \
+    --cache_dir /data/james/.cache \
+    --device cuda:0 \
+    --sequence_len 128 \
+    --target_epsilon 2.0
+```
+
+Command for running performance results for dbpedia_14 
+
+```bash
+python results.py \
+    --input_test_file /data/james/dbpedia_14_data \
+    --output_dir /data/james/models \
+    --teacher_model_type gpt2-large \
+    --student_model_type distilgpt2 \
+    --syn_data_teacher_file /data/james/models/cc-gpt2-large-dbpedia_14-2.0-dp \
+    --syn_data_student_file /data/james/models/distilgpt2-dbpedia_14-2.0-dp-syn-data \
+    --dpkd_syn_data_student_file /data/james/models/best-distilgpt2-dbpedia_14-2.0-DPKD-syn-data \
+    --dpkd_teacher_file /data/james/models/gpt2-large-dbpedia_14-1.0-dp \
+    --dpkd_student_file /data/james/models/distilgpt2-dbpedia_14-2.0-DPKD \
+    --dpsgd_student_file /data/james/models/distilgpt2-dbpedia_14-2.0-dp \
+    --use_cache True \
+    --cache_dir /data/james/.cache \
+    --device cuda:0 \
+    --sequence_len 128 \
+    --target_epsilon 2.0
+```
+
+```bash
+python results.py \
+    --input_test_file /data/james/reddit_data \
+    --output_dir /data/james/models \
+    --teacher_model_type gpt2-large \
+    --student_model_type distilgpt2 \
+    --syn_data_teacher_file /data/james/models/cc-gpt2-large-reddit-2.0-dp \
+    --syn_data_student_file /data/james/models/distilgpt2-dbpedia_14-2.0-dp-syn-data \
+    --dpkd_syn_data_student_file /data/james/models/distilgpt2-reddit-2.0-DPKD-syn-data \
+    --dpkd_teacher_file /data/james/models/gpt2-large-reddit-1.0-dp \
+    --dpkd_student_file /data/james/models/distilgpt2-reddit-2.0-DPKD \
+    --dpsgd_student_file /data/james/models/distilgpt2-reddit-2.0-dp \
     --use_cache True \
     --cache_dir /data/james/.cache \
     --device cuda:0 \

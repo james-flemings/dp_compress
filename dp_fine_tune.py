@@ -26,7 +26,7 @@ class ModelArguments:
         "help": "Model sequence length"
     })
     use_cc: bool = field(default=False, metadata={
-        "help": "Whether to use control codes"
+        "help": "Whether to train with control codes"
     })
     use_cache: bool = field(default=False, metadata={
         "help": "Whether to use cache directory or not"

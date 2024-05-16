@@ -208,7 +208,11 @@ def main(args: Arguments):
         dataset = datasets.load_dataset('csv', data_files={'train': args.model.synthetic_data_file}, cache_dir=args.model.cache_dir)
     else:
         dataset = datasets.load_dataset('csv', data_files={'train': args.model.synthetic_data_file})
-
+    dataset.set_format("pandas")
+    dataset['train'][:].dropna()
+    #dataset['train'] = dataset['train'].cast(datasets.Features({'text': datasets.Value('string'),
+    #                                                            'label': datasets.Value("string")
+    #                                                            }))
     dataset = dataset['train'].train_test_split(test_size=0.01)
     label_column_names = [name for name in dataset["train"].column_names if "label" in name]
 
@@ -220,7 +224,7 @@ def main(args: Arguments):
             text = "\t".join([examples[name][t] for name in label_column_names]) + "\n\n" + examples['text'][t] + tokenizer.eos_token
             batch.append(text)
         '''
-        batch = examples['text']
+        batch = examples['text'].astype(str).tolist()
         result = tokenizer(batch, padding="max_length", truncation=True,
                            max_length=args.model.sequence_len)
 

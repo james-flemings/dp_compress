@@ -212,7 +212,7 @@ def main(args: Arguments):
             desc="tokenizing dataset",
             remove_columns=dataset.column_names['train']
         )
-    output_name = f'{args.model.student_model}-{args.model.dataset_name}-{privacy_args.target_epsilon}-DPKD'
+    output_name = f'{args.model.student_model}-{args.model.dataset_name}-{2*privacy_args.target_epsilon}-DPKD'
     train_args.label_names = ['labels']
     train_args.output_dir = os.path.join(train_args.output_dir, output_name)
     data_collator = dp_transformers.DataCollatorForPrivateCausalLanguageModeling(tokenizer)
