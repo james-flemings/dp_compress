@@ -1,4 +1,4 @@
-# dp_compress
+# Differentially Private Knowledge Distillation via Synthetic Text Generation
 
 We are using the [dp-transformers](https://github.com/microsoft/dp-transformers) library as a submodule. To properly add it, run the following commands after cloning this repository:
 
