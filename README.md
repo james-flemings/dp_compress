@@ -10,8 +10,8 @@ git submodule update
 Command to run for fine-tuning:
 ```bash
 python -m torch.distributed.run --nproc_per_node=8 dp_fine_tune.py \
-    --data_dir /data/james/reddit_data \
-    --dataset_name reddit \
+    --data_dir /data/james/big_patent_data \
+    --dataset_name big_patent \
     --output_dir /data/james/models \
     --model_name distilgpt2 \
     --per_device_train_batch_size 32 \
@@ -43,12 +43,12 @@ Command for generating synthetic data:
 ```bash
 python generate_text.py \
     --model_type gpt2-large \
-    --pytorch_checkpoint /data/james/models/cc-gpt2-large-reddit-2.0-dp/pytorch_model.bin \
-    --input_training_file /data/james/reddit_data/train.csv \
+    --pytorch_checkpoint /data/james/models/cc-gpt2-large-big_patent-2.0-dp/pytorch_model.bin \
+    --input_training_file /data/james/big_patent_data/train.csv \
     --output_dir /data/james/synthetic_data \
     --use_cache True \
     --cache_dir /data/james/.cache \
-    --dataset reddit \
+    --dataset big_patent \
     --seq_len 128 \
     --batch_size 64 \
     --total_sequences 600000 \
@@ -60,12 +60,12 @@ python generate_text.py \
 Command for performing knowledge distillation:
 ```bash
 python -m torch.distributed.run --nproc_per_node=8 knowledge_distil.py \
-    --dataset reddit \
+    --dataset big_patent \
     --output_dir /data/james/models \
     --student_model distilgpt2 \
     --teacher_model gpt2-large \
-    --pytorch_checkpoint /data/james/models/cc-gpt2-large-reddit-2.0-dp/pytorch_model.bin \
-    --synthetic_data_file /data/james/synthetic_data/128_reddit_2.0_dp_synthetic_data.csv \
+    --pytorch_checkpoint /data/james/models/cc-gpt2-large-big_patent-2.0-dp/pytorch_model.bin \
+    --synthetic_data_file /data/james/synthetic_data/128_big_patent_2.0_dp_synthetic_data.csv \
     --sequence_len 128 \
     --lambda_param 0.4 \
     --alpha_cos 0 \
@@ -98,12 +98,12 @@ python -m torch.distributed.run --nproc_per_node=8 knowledge_distil.py \
 Command for performing differentially private knowledge distillation:
 ```bash
 python -m torch.distributed.run --nproc_per_node=8 dp_kd.py \
-    --data_dir /data/james/reddit_data \
-    --dataset_name reddit \
+    --data_dir /data/james/big_patent_data \
+    --dataset_name big_patent \
     --output_dir /data/james/models \
     --student_model distilgpt2 \
     --teacher_model gpt2-large \
-    --pytorch_checkpoint /data/james/models/gpt2-large-reddit-1.0-dp/pytorch_model.bin \
+    --pytorch_checkpoint /data/james/models/gpt2-large-big_patent-1.0-dp/pytorch_model.bin \
     --sequence_len 128 \
     --lambda_param 0.4 \
     --temperature 1.0 \
