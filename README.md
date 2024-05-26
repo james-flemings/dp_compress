@@ -194,21 +194,13 @@ python results.py \
     --target_epsilon 2.0
 ```
 
-```bash
-python results.py \
-    --input_test_file /data/james/reddit_data \
-    --output_dir /data/james/models \
-    --teacher_model_type gpt2-large \
-    --student_model_type distilgpt2 \
-    --syn_data_teacher_file /data/james/models/cc-gpt2-large-reddit-2.0-dp \
-    --syn_data_student_file /data/james/models/distilgpt2-dbpedia_14-2.0-dp-syn-data \
-    --dpkd_syn_data_student_file /data/james/models/distilgpt2-reddit-2.0-DPKD-syn-data \
-    --dpkd_teacher_file /data/james/models/gpt2-large-reddit-1.0-dp \
-    --dpkd_student_file /data/james/models/distilgpt2-reddit-2.0-DPKD \
-    --dpsgd_student_file /data/james/models/distilgpt2-reddit-2.0-dp \
-    --use_cache True \
-    --cache_dir /data/james/.cache \
-    --device cuda:0 \
-    --sequence_len 128 \
-    --target_epsilon 2.0
+## Citation
+If you found this repository useful, please consider citing our work:
+```stex
+@article{flemings2024differentially,
+  title={Differentially private knowledge distillation via synthetic text generation},
+  author={Flemings, James and Annavaram, Murali},
+  journal={arXiv preprint arXiv:2403.00932},
+  year={2024}
+}
 ```
