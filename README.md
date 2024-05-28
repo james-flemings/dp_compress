@@ -1,6 +1,6 @@
 # Differentially Private Knowledge Distillation via Synthetic Text Generation
 
-This is the source code for the paper [Differentially Private Knowledge Distillation via Synthetic Text Generation](https://arxiv.org/pdf/2403.00932). In this work, we improved differentially private knowledge distillation of generate large language models by using the teacher model to generate differentially prviate synthetic data. Our framework proceeds in three steps: (1) A teaher model is fine-tuned on a private downstream dataset using DP-SGD. (2) The teacher model is prompt with control codes to generate synthetic data. (3) A student model is trained on the synthetic data with knowledge distillation from the teacher.
+This is the source code for the paper [Differentially Private Knowledge Distillation via Synthetic Text Generation](https://arxiv.org/pdf/2403.00932). In this work, we improved differentially private knowledge distillation of generative large language models by expoiting differentially prviate synthetic data for training the student. Our framework proceeds in three steps: (1) A teaher model is fine-tuned on a private downstream dataset using DP-SGD. (2) The teacher model is prompt with control codes to generate synthetic data. (3) A student model is trained on the synthetic data with knowledge distillation from the teacher.
 
 ## Environment Setup
 We are using the [dp-transformers](https://github.com/microsoft/dp-transformers) library as a submodule. To properly add it, run the following commands after cloning this repository:
@@ -134,8 +134,7 @@ python -m torch.distributed.run --nproc_per_node=8 dp_kd.py \
     --cache_dir /data/james/.cache
 ```
 
-Command for running performance results for yelp
-
+Command for running performance results for yelp:
 ```bash
 python results.py \
     --input_test_file /data/james/yelp_data \
@@ -155,8 +154,7 @@ python results.py \
     --target_epsilon 2.0
 ```
 
-Command for running performance results for big patent 
-
+Command for running performance results for big patent:
 ```bash
 python results.py \
     --input_test_file /data/james/big_patent \
@@ -176,8 +174,7 @@ python results.py \
     --target_epsilon 2.0
 ```
 
-Command for running performance results for dbpedia_14 
-
+Command for running performance results for dbpedia_14:
 ```bash
 python results.py \
     --input_test_file /data/james/dbpedia_14_data \
