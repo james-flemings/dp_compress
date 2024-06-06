@@ -39,6 +39,7 @@ python -m torch.distributed.run --nproc_per_node=8 dp_fine_tune.py \
     --disable_tqdm False \
     --load_best_model_at_end True \
     --use_cache True \
+    --use_cc False \
     --cache_dir /data/james/.cache
 ```
 
